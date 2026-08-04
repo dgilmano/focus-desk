@@ -8,28 +8,28 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "FocusDesk", targets: ["FocusCarousel"]),
-        .library(name: "FocusDeskWidget", targets: ["FocusCarouselWidget"])
+        .executable(name: "FocusDesk", targets: ["FocusDesk"]),
+        .library(name: "FocusDeskWidget", targets: ["FocusDeskWidget"])
     ],
     targets: [
         .target(
-            name: "FocusCarouselCore",
-            path: "Sources/FocusCarouselCore"
+            name: "FocusDeskCore",
+            path: "Sources/FocusDeskCore"
         ),
         .executableTarget(
-            name: "FocusCarousel",
-            dependencies: ["FocusCarouselCore"],
-            path: "Sources/FocusCarouselApp"
+            name: "FocusDesk",
+            dependencies: ["FocusDeskCore"],
+            path: "Sources/FocusDeskApp"
         ),
         .target(
-            name: "FocusCarouselWidget",
-            dependencies: ["FocusCarouselCore"],
-            path: "Sources/FocusCarouselWidget"
+            name: "FocusDeskWidget",
+            dependencies: ["FocusDeskCore"],
+            path: "Sources/FocusDeskWidget"
         ),
         .testTarget(
-            name: "FocusCarouselCoreTests",
-            dependencies: ["FocusCarouselCore"],
-            path: "Tests/FocusCarouselCoreTests"
+            name: "FocusDeskCoreTests",
+            dependencies: ["FocusDeskCore"],
+            path: "Tests/FocusDeskCoreTests"
         )
     ]
 )

@@ -1,5 +1,5 @@
 import AppKit
-import FocusCarouselCore
+import FocusDeskCore
 import SwiftData
 import SwiftUI
 
@@ -10,7 +10,7 @@ private enum MainSection {
     case completed
 }
 
-struct MainCarouselView: View {
+struct MainDeskView: View {
     @Environment(\.modelContext) private var modelContext
 
     @Query(sort: \FocusTask.carouselOrder, order: .forward)
@@ -45,7 +45,7 @@ struct MainCarouselView: View {
 
     @FocusState private var noteFocused: Bool
 
-    private let router = CarouselRouter()
+    private let router = DeskRouter()
     private let serverClock = OfflineFirstServerClock.environmentBacked()
     private let defaultSidebarWidth = 174.0
     private let maxSidebarWidth = 260.0
@@ -328,7 +328,7 @@ struct MainCarouselView: View {
                     if let task = currentTask {
                         taskWorkspace(task)
                     } else {
-                        EmptyCarouselView {
+                        EmptyDeskView {
                             selectedSection = .newTask
                         }
                     }

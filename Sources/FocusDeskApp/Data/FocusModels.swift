@@ -1,6 +1,6 @@
 import Foundation
 import SwiftData
-import FocusCarouselCore
+import FocusDeskCore
 
 @Model
 final class FocusTask: Identifiable {

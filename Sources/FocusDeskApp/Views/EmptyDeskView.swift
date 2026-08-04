@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct EmptyCarouselView: View {
+struct EmptyDeskView: View {
     var createTask: () -> Void
 
     var body: some View {

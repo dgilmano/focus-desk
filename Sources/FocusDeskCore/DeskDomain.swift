@@ -50,7 +50,7 @@ public struct TaskSnapshot: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-public struct CarouselRouter: Sendable {
+public struct DeskRouter: Sendable {
     public init() {}
 
     public func activeTasks(from tasks: [TaskSnapshot]) -> [TaskSnapshot] {
@@ -114,7 +114,7 @@ public struct OfflineFirstServerClock: ServerClock {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> OfflineFirstServerClock {
         guard
-            let rawURL = environment["FOCUS_CAROUSEL_SERVER_TIME_URL"],
+            let rawURL = environment["FOCUS_DESK_SERVER_TIME_URL"] ?? environment["FOCUS_CAROUSEL_SERVER_TIME_URL"],
             let url = URL(string: rawURL)
         else {
             return OfflineFirstServerClock()

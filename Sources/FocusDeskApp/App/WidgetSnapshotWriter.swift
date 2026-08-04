@@ -1,4 +1,4 @@
-import FocusCarouselCore
+import FocusDeskCore
 import Foundation
 
 #if canImport(WidgetKit)

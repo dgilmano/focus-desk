@@ -1,15 +1,15 @@
-import FocusCarouselCore
+import FocusDeskCore
 import SwiftUI
 import WidgetKit
 
-struct FocusCarouselTimelineEntry: TimelineEntry {
+struct FocusDeskTimelineEntry: TimelineEntry {
     var date: Date
     var snapshot: WidgetSnapshot
 }
 
-struct FocusCarouselTimelineProvider: TimelineProvider {
-    func placeholder(in context: Context) -> FocusCarouselTimelineEntry {
-        FocusCarouselTimelineEntry(
+struct FocusDeskTimelineProvider: TimelineProvider {
+    func placeholder(in context: Context) -> FocusDeskTimelineEntry {
+        FocusDeskTimelineEntry(
             date: Date(),
             snapshot: WidgetSnapshot(
                 currentTaskTitle: "Configure EVPN Export Policy",
@@ -20,20 +20,20 @@ struct FocusCarouselTimelineProvider: TimelineProvider {
         )
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (FocusCarouselTimelineEntry) -> Void) {
-        completion(FocusCarouselTimelineEntry(date: Date(), snapshot: WidgetSnapshotStore().read()))
+    func getSnapshot(in context: Context, completion: @escaping (FocusDeskTimelineEntry) -> Void) {
+        completion(FocusDeskTimelineEntry(date: Date(), snapshot: WidgetSnapshotStore().read()))
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<FocusCarouselTimelineEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<FocusDeskTimelineEntry>) -> Void) {
         let snapshot = WidgetSnapshotStore().read()
-        let entry = FocusCarouselTimelineEntry(date: Date(), snapshot: snapshot)
+        let entry = FocusDeskTimelineEntry(date: Date(), snapshot: snapshot)
         let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date()
         completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
     }
 }
 
-struct FocusCarouselWidgetView: View {
-    var entry: FocusCarouselTimelineEntry
+struct FocusDeskWidgetView: View {
+    var entry: FocusDeskTimelineEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -70,12 +70,12 @@ struct FocusCarouselWidgetView: View {
     }
 }
 
-struct FocusCarouselWidget: Widget {
-    let kind = "FocusCarouselWidget"
+struct FocusDeskWidget: Widget {
+    let kind = "FocusDeskWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: FocusCarouselTimelineProvider()) { entry in
-            FocusCarouselWidgetView(entry: entry)
+        StaticConfiguration(kind: kind, provider: FocusDeskTimelineProvider()) { entry in
+            FocusDeskWidgetView(entry: entry)
         }
         .configurationDisplayName("Focus Desk")
         .description("Shows the next active task and latest progress note.")
@@ -83,11 +83,11 @@ struct FocusCarouselWidget: Widget {
     }
 }
 
-#if FOCUS_CAROUSEL_WIDGET_EXTENSION
+#if FOCUS_DESK_WIDGET_EXTENSION
 @main
-struct FocusCarouselWidgetBundle: WidgetBundle {
+struct FocusDeskWidgetBundle: WidgetBundle {
     var body: some Widget {
-        FocusCarouselWidget()
+        FocusDeskWidget()
     }
 }
 #endif

@@ -3,7 +3,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct FocusCarouselApp: App {
+struct FocusDeskApp: App {
     private let modelContainer: ModelContainer
 
     @AppStorage("isDarkTheme")
@@ -17,7 +17,7 @@ struct FocusCarouselApp: App {
 
     var body: some Scene {
         WindowGroup("Focus Desk") {
-            MainCarouselView()
+            MainDeskView()
                 .modelContainer(modelContainer)
                 .preferredColorScheme(isDarkTheme ? .dark : .light)
                 .frame(minWidth: 720, minHeight: 520)
@@ -29,7 +29,7 @@ struct FocusCarouselApp: App {
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
         .commands {
-            FocusCarouselCommands()
+            FocusDeskCommands()
         }
 
         Window("Task Manager", id: "task-manager") {
@@ -42,7 +42,7 @@ struct FocusCarouselApp: App {
     }
 }
 
-struct FocusCarouselCommands: Commands {
+struct FocusDeskCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {

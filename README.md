@@ -20,6 +20,6 @@ swift test
 swift run FocusDesk
 ```
 
-The Swift package is intentionally dependency-free. The widget target is included as source-ready WidgetKit support; when embedded in an Xcode app-extension target, define `FOCUS_CAROUSEL_WIDGET_EXTENSION` to enable its `@main` widget bundle entry point.
+The Swift package is intentionally dependency-free. The widget target is included as source-ready WidgetKit support; when embedded in an Xcode app-extension target, define `FOCUS_DESK_WIDGET_EXTENSION` to enable its `@main` widget bundle entry point.
 
-Set `FOCUS_CAROUSEL_SERVER_TIME_URL` to an endpoint that returns an HTTP `Date` header to timestamp progress from server time. Without that endpoint, the app falls back to local time and remains fully offline.
+Set `FOCUS_DESK_SERVER_TIME_URL` to an endpoint that returns an HTTP `Date` header to timestamp progress from server time. Without that endpoint, the app falls back to local time and remains fully offline.

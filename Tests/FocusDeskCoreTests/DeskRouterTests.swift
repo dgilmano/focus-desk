@@ -1,8 +1,8 @@
 import XCTest
-@testable import FocusCarouselCore
+@testable import FocusDeskCore
 
-final class CarouselRouterTests: XCTestCase {
-    private let router = CarouselRouter()
+final class DeskRouterTests: XCTestCase {
+    private let router = DeskRouter()
 
     func testNextTaskSkipsCompletedAndWraps() {
         let firstID = UUID()
