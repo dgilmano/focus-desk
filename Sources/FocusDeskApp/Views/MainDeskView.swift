@@ -8,6 +8,7 @@ private enum MainSection {
     case newTask
     case tasks
     case completed
+    case summary
 }
 
 struct MainDeskView: View {
@@ -86,6 +87,14 @@ struct MainDeskView: View {
             .sorted {
                 ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
             }
+    }
+
+    private var journalEntriesTodayCount: Int {
+        let calendar = Calendar.current
+        return tasks
+            .flatMap(\.entries)
+            .filter { calendar.isDateInToday($0.timestamp) }
+            .count
     }
 
     var body: some View {
@@ -217,6 +226,15 @@ struct MainDeskView: View {
                     ) {
                         selectedSection = .completed
                     }
+
+                    OrbSidebarButton(
+                        title: "Summary",
+                        systemImage: "chart.bar.xaxis",
+                        isSelected: selectedSection == .summary,
+                        count: journalEntriesTodayCount
+                    ) {
+                        selectedSection = .summary
+                    }
                 }
 
                 Spacer(minLength: 12)
@@ -341,6 +359,9 @@ struct MainDeskView: View {
                 case .completed:
                     manageWorkspace(.completed)
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
+                case .summary:
+                    summaryWorkspace
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -417,6 +438,8 @@ struct MainDeskView: View {
             return "Tasks"
         case .completed:
             return "Completed"
+        case .summary:
+            return "Summary"
         }
     }
 
@@ -428,6 +451,8 @@ struct MainDeskView: View {
             return activeTasks.count == 1 ? "1 active task" : "\(activeTasks.count) active tasks"
         case .completed:
             return completedTasks.count == 1 ? "1 completed task" : "\(completedTasks.count) completed tasks"
+        case .summary:
+            return journalEntriesTodayCount == 1 ? "1 journal entry today" : "\(journalEntriesTodayCount) journal entries today"
         case .desk:
             break
         }
@@ -441,6 +466,32 @@ struct MainDeskView: View {
         }
 
         return "\(activeTasks.count) active tasks"
+    }
+
+    private var summaryWorkspace: some View {
+        GeometryReader { proxy in
+            let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
+
+            ScrollView {
+                SummaryWorkspaceView(
+                    tasks: tasks,
+                    activeTasks: activeTasks,
+                    completedTasks: completedTasks,
+                    now: Date(),
+                    onOpen: { task in
+                        select(task.id)
+                    },
+                    onCreate: {
+                        selectedSection = .newTask
+                    }
+                )
+                .frame(minWidth: contentWidth, maxWidth: .infinity, alignment: .topLeading)
+                .padding(.horizontal, workspaceHorizontalPadding)
+                .padding(.top, 34)
+                .padding(.bottom, 28)
+                .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
     }
 
     private var newTaskWorkspace: some View {
@@ -1185,6 +1236,397 @@ private struct GoogleCloudSettingsView: View {
         }
 
         NSWorkspace.shared.open(url)
+    }
+}
+
+private struct SummaryWorkspaceView: View {
+    var tasks: [FocusTask]
+    var activeTasks: [FocusTask]
+    var completedTasks: [FocusTask]
+    var now: Date
+    var onOpen: (FocusTask) -> Void
+    var onCreate: () -> Void
+
+    private var metrics: LocalSummaryMetrics {
+        LocalSummaryMetrics(
+            tasks: tasks,
+            activeTasks: activeTasks,
+            completedTasks: completedTasks,
+            now: now
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 170), spacing: 16)],
+                alignment: .leading,
+                spacing: 16
+            ) {
+                SummaryMetricCard(
+                    title: "Journal Today",
+                    value: "\(metrics.journalEntriesToday.count)",
+                    detail: "\(metrics.allJournalEntries.count) total",
+                    systemImage: "text.badge.checkmark"
+                )
+
+                SummaryMetricCard(
+                    title: "Completed",
+                    value: "\(metrics.completedToday.count)",
+                    detail: "\(completedTasks.count) total",
+                    systemImage: "checkmark.circle"
+                )
+
+                SummaryMetricCard(
+                    title: "Inactive Tasks",
+                    value: "\(metrics.inactiveTasks.count)",
+                    detail: "No journal step today",
+                    systemImage: "clock.badge.exclamationmark"
+                )
+
+                SummaryMetricCard(
+                    title: "Last Step",
+                    value: metrics.lastStepElapsedText,
+                    detail: metrics.lastStepDetail,
+                    systemImage: "clock"
+                )
+            }
+
+            if metrics.allJournalEntries.isEmpty && activeTasks.isEmpty {
+                emptySummaryState
+            } else {
+                needsAttentionPanel
+                todayJournalPanel
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var emptySummaryState: some View {
+        OrbGroupedPanel {
+            VStack(spacing: 10) {
+                OrbIcon(systemName: "chart.bar.xaxis", filled: true)
+
+                Text("No summary yet")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                Text("Create a task and log journal steps to build daily analytics.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    onCreate()
+                } label: {
+                    Label("New Task", systemImage: "plus")
+                }
+                .padding(.top, 6)
+            }
+            .frame(maxWidth: .infinity, minHeight: 180)
+            .padding(18)
+        }
+    }
+
+    private var needsAttentionPanel: some View {
+        OrbGroupedPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Needs attention")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Text("\(metrics.inactiveTasks.count)")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if metrics.inactiveTasks.isEmpty {
+                    Text("Every active task has a journal step today.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(metrics.inactiveTasks.enumerated()), id: \.element.id) { index, task in
+                            SummaryTaskAttentionRow(
+                                task: task,
+                                now: now,
+                                onOpen: {
+                                    onOpen(task)
+                                }
+                            )
+
+                            if index < metrics.inactiveTasks.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(18)
+        }
+    }
+
+    private var todayJournalPanel: some View {
+        OrbGroupedPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Today journal")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Text("\(metrics.journalEntriesToday.count)")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if metrics.journalEntriesToday.isEmpty {
+                    Text("No journal entries today.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(metrics.journalEntriesToday.enumerated()), id: \.element.entry.id) { index, item in
+                            SummaryJournalEntryRow(item: item)
+
+                            if index < metrics.journalEntriesToday.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(18)
+        }
+    }
+}
+
+private struct LocalSummaryMetrics {
+    var allJournalEntries: [SummaryJournalEntry]
+    var journalEntriesToday: [SummaryJournalEntry]
+    var completedToday: [FocusTask]
+    var inactiveTasks: [FocusTask]
+    var latestJournalEntry: SummaryJournalEntry?
+    var now: Date
+
+    init(
+        tasks: [FocusTask],
+        activeTasks: [FocusTask],
+        completedTasks: [FocusTask],
+        now: Date,
+        calendar: Calendar = .current
+    ) {
+        self.now = now
+        let startOfDay = calendar.startOfDay(for: now)
+
+        let allEntries = tasks
+            .flatMap { task in
+                task.entries.map { entry in
+                    SummaryJournalEntry(task: task, entry: entry)
+                }
+            }
+            .sorted { lhs, rhs in
+                lhs.entry.timestamp > rhs.entry.timestamp
+            }
+
+        allJournalEntries = allEntries
+        journalEntriesToday = allEntries.filter { item in
+            item.entry.timestamp >= startOfDay && item.entry.timestamp <= now
+        }
+        completedToday = completedTasks.filter { task in
+            guard let completedAt = task.completedAt else {
+                return false
+            }
+
+            return completedAt >= startOfDay && completedAt <= now
+        }
+        inactiveTasks = activeTasks
+            .filter { task in
+                guard let latestEntry = task.latestEntry else {
+                    return true
+                }
+
+                return latestEntry.timestamp < startOfDay
+            }
+            .sorted { lhs, rhs in
+                let lhsDate = lhs.latestEntry?.timestamp ?? lhs.createdAt
+                let rhsDate = rhs.latestEntry?.timestamp ?? rhs.createdAt
+                return lhsDate < rhsDate
+            }
+        latestJournalEntry = allEntries.first
+    }
+
+    var lastStepElapsedText: String {
+        guard let latestJournalEntry else {
+            return "No steps"
+        }
+
+        return SummaryDateFormatting.elapsedString(from: latestJournalEntry.entry.timestamp, to: now)
+    }
+
+    var lastStepDetail: String {
+        latestJournalEntry?.task.title ?? "No journal entries"
+    }
+}
+
+private struct SummaryJournalEntry {
+    var task: FocusTask
+    var entry: ProgressEntry
+}
+
+private struct SummaryMetricCard: View {
+    var title: String
+    var value: String
+    var detail: String
+    var systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                OrbIcon(systemName: systemImage, filled: true)
+
+                Spacer()
+            }
+
+            Text(value)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(detail)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 136, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(OrbStyle.groupedBackground)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct SummaryTaskAttentionRow: View {
+    var task: FocusTask
+    var now: Date
+    var onOpen: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            OrbIcon(systemName: "clock", filled: false)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(lastStepText)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            Button(action: onOpen) {
+                Image(systemName: "arrow.forward")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Open Task")
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var lastStepText: String {
+        guard let latestEntry = task.latestEntry else {
+            return "No journal steps yet"
+        }
+
+        return "\(SummaryDateFormatting.elapsedString(from: latestEntry.timestamp, to: now)) since last step"
+    }
+}
+
+private struct SummaryJournalEntryRow: View {
+    var item: SummaryJournalEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(item.task.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text(SummaryDateFormatting.shortTimeString(from: item.entry.timestamp))
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+
+            Text(item.entry.note)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private enum SummaryDateFormatting {
+    static func elapsedString(from date: Date, to referenceDate: Date) -> String {
+        let elapsedSeconds = max(0, referenceDate.timeIntervalSince(date))
+
+        if elapsedSeconds < 60 {
+            return "Just now"
+        }
+
+        let units: [(seconds: TimeInterval, shortName: String)] = [
+            (60 * 60 * 24 * 365, "y"),
+            (60 * 60 * 24 * 30, "mo"),
+            (60 * 60 * 24 * 7, "w"),
+            (60 * 60 * 24, "d"),
+            (60 * 60, "h"),
+            (60, "m")
+        ]
+
+        guard let unit = units.first(where: { elapsedSeconds >= $0.seconds }) else {
+            return "Just now"
+        }
+
+        let value = Int(elapsedSeconds / unit.seconds)
+        return "\(value)\(unit.shortName) ago"
+    }
+
+    static func shortTimeString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 
