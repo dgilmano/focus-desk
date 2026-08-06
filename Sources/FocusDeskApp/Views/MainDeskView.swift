@@ -597,8 +597,10 @@ struct MainDeskView: View {
                     )
                         .id("summary-\(task.id.uuidString)")
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        .zIndex(1)
 
                     MotivationBlockView(task: task, onMotivationChanged: saveContext)
+                        .zIndex(0)
 
                     TaskCardView(
                         task: task,

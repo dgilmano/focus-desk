@@ -95,7 +95,6 @@ struct TaskFocusSummaryView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(OrbStyle.groupedBackground.opacity(0.78))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onHover { isHovered in
             withAnimation(.smooth(duration: 0.12)) {
