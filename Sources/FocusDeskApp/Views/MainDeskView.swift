@@ -1,4 +1,5 @@
 import AppKit
+import Charts
 import FocusDeskCore
 import SwiftData
 import SwiftUI
@@ -1334,6 +1335,7 @@ private struct SummaryWorkspaceView: View {
             if metrics.allJournalEntries.isEmpty && activeTasks.isEmpty {
                 emptySummaryState
             } else {
+                tagActivityPanel
                 needsAttentionPanel
                 todayJournalPanel
             }
@@ -1363,6 +1365,50 @@ private struct SummaryWorkspaceView: View {
                 .padding(.top, 6)
             }
             .frame(maxWidth: .infinity, minHeight: 180)
+            .padding(18)
+        }
+    }
+
+    private var tagActivityPanel: some View {
+        OrbGroupedPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Tag activity today")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(.primary)
+
+                        Text("Estimated from journal steps")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Spacer()
+
+                    Text(metrics.tagActivityTotalText)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if metrics.tagActivities.isEmpty {
+                    Text("No journal activity today.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                } else {
+                    TagActivityChart(activities: metrics.tagActivities)
+
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(metrics.tagActivities.enumerated()), id: \.element.id) { index, activity in
+                            TagActivitySummaryRow(activity: activity)
+
+                            if index < metrics.tagActivities.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
             .padding(18)
         }
     }
@@ -1452,6 +1498,7 @@ private struct LocalSummaryMetrics {
     var completedToday: [FocusTask]
     var inactiveTasks: [FocusTask]
     var latestJournalEntry: SummaryJournalEntry?
+    var tagActivities: [TagActivitySummary]
     var now: Date
 
     init(
@@ -1463,6 +1510,7 @@ private struct LocalSummaryMetrics {
     ) {
         self.now = now
         let startOfDay = calendar.startOfDay(for: now)
+        let todayInterval = DateInterval(start: startOfDay, end: now)
 
         let allEntries = tasks
             .flatMap { task in
@@ -1499,6 +1547,17 @@ private struct LocalSummaryMetrics {
                 return lhsDate < rhsDate
             }
         latestJournalEntry = allEntries.first
+        tagActivities = TagActivityAnalyzer().summaries(
+            for: allEntries.map { item in
+                TagActivityEvent(
+                    taskID: item.task.id,
+                    taskTitle: item.task.title,
+                    tags: item.task.enabledTagRecords,
+                    timestamp: item.entry.timestamp
+                )
+            },
+            in: todayInterval
+        )
     }
 
     var lastStepElapsedText: String {
@@ -1511,6 +1570,14 @@ private struct LocalSummaryMetrics {
 
     var lastStepDetail: String {
         latestJournalEntry?.task.title ?? "No journal entries"
+    }
+
+    var tagActivityTotalText: String {
+        SummaryDateFormatting.durationString(
+            minutes: tagActivities.reduce(0) { partialResult, activity in
+                partialResult + activity.estimatedMinutes
+            }
+        )
     }
 }
 
@@ -1559,6 +1626,97 @@ private struct SummaryMetricCard: View {
                 .fill(OrbStyle.groupedBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct TagActivityChart: View {
+    var activities: [TagActivitySummary]
+
+    private var chartHeight: Double {
+        min(max(Double(activities.count) * 34, 118), 280)
+    }
+
+    var body: some View {
+        Chart(activities) { activity in
+            BarMark(
+                x: .value("Estimated time", activity.estimatedMinutes),
+                y: .value("Tag", activity.name)
+            )
+            .foregroundStyle(TaskTagPalette.palette(for: activity.colorName).background)
+            .cornerRadius(5)
+        }
+        .chartXAxis {
+            AxisMarks(position: .bottom) { value in
+                AxisGridLine()
+                    .foregroundStyle(OrbStyle.hairline)
+
+                AxisValueLabel {
+                    if let minutes = value.as(Double.self) {
+                        Text(SummaryDateFormatting.durationString(minutes: minutes))
+                    }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) {
+                AxisValueLabel()
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .font(.system(size: 11, weight: .regular))
+            }
+        }
+        .frame(height: chartHeight)
+    }
+}
+
+private struct TagActivitySummaryRow: View {
+    var activity: TagActivitySummary
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            SummaryTagBadge(activity: activity)
+
+            Spacer(minLength: 12)
+
+            Text(activityDetail)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Text(SummaryDateFormatting.durationString(minutes: activity.estimatedMinutes))
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var activityDetail: String {
+        "\(activity.taskCount) \(activity.taskCount == 1 ? "task" : "tasks") - \(activity.journalStepCount) \(activity.journalStepCount == 1 ? "step" : "steps")"
+    }
+}
+
+private struct SummaryTagBadge: View {
+    var activity: TagActivitySummary
+
+    private var palette: TaskTagPalette {
+        TaskTagPalette.palette(for: activity.colorName)
+    }
+
+    var body: some View {
+        Text(activity.name)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(palette.foreground)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(palette.background)
+            )
     }
 }
 
@@ -1668,6 +1826,23 @@ private enum SummaryDateFormatting {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    static func durationString(minutes: Double) -> String {
+        let roundedMinutes = max(0, Int(minutes.rounded()))
+
+        if roundedMinutes < 60 {
+            return "\(roundedMinutes)m"
+        }
+
+        let hours = roundedMinutes / 60
+        let remainingMinutes = roundedMinutes % 60
+
+        if remainingMinutes == 0 {
+            return "\(hours)h"
+        }
+
+        return "\(hours)h \(remainingMinutes)m"
     }
 }
 
