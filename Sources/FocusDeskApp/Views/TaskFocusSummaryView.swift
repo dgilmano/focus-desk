@@ -1,8 +1,10 @@
+import FocusDeskCore
 import SwiftUI
 
 struct TaskFocusSummaryView: View {
     @Bindable var task: FocusTask
 
+    var availableTags: [TaskTagRecord]
     var onTaskChanged: () -> Void
     var onComplete: () -> Void
 
@@ -78,7 +80,11 @@ struct TaskFocusSummaryView: View {
 
             Spacer(minLength: 8)
 
-            TaskTagsView(task: task, onTagsChanged: onTaskChanged)
+            TaskTagsView(
+                task: task,
+                availableTags: availableTags,
+                onTagsChanged: onTaskChanged
+            )
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: summaryPanelHeight, alignment: .topLeading)

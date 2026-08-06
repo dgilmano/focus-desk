@@ -3,11 +3,13 @@ import SwiftUI
 
 struct TaskTagsView: View {
     @Bindable var task: FocusTask
+    var availableTags: [TaskTagRecord]
     var onTagsChanged: () -> Void
 
     var body: some View {
         TaskTagsEditorView(
             tags: tagBinding,
+            availableTags: availableTags,
             onTagsChanged: onTagsChanged
         )
     }
@@ -27,16 +29,18 @@ struct TaskTagsView: View {
 
 struct TaskTagsEditorView: View {
     @Binding var tags: [TaskTagRecord]
+    var availableTags: [TaskTagRecord] = []
     var onTagsChanged: () -> Void = {}
 
     @State private var editingTagID: UUID?
     @State private var draftName = ""
     @State private var draftColorName = TaskTagPalette.gray.rawValue
-    @State private var isAdding = false
+    @State private var isAddPopoverPresented = false
+    @State private var isEditPopoverPresented = false
     @FocusState private var tagNameFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
             TagFlowLayout(spacing: 7, rowSpacing: 7) {
                 ForEach(tags) { tag in
                     TaskTagChip(
@@ -53,15 +57,14 @@ struct TaskTagsEditorView: View {
                 addTagButton
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if isEditing {
-                tagEditor
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
         .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
         .animation(.smooth(duration: 0.18), value: tags)
-        .animation(.smooth(duration: 0.18), value: isEditing)
+        .popover(isPresented: $isEditPopoverPresented) {
+            tagEditor(title: "Edit tag")
+                .frame(width: 360)
+                .padding(14)
+        }
     }
 
     private var addTagButton: some View {
@@ -82,26 +85,76 @@ struct TaskTagsEditorView: View {
         }
         .buttonStyle(.plain)
         .help("Add tag")
+        .popover(isPresented: $isAddPopoverPresented) {
+            VStack(alignment: .leading, spacing: 14) {
+                if !availableTagsToAdd.isEmpty {
+                    existingTagsPicker
+                }
+
+                tagEditor(title: "New tag")
+            }
+            .frame(width: 360)
+            .padding(14)
+        }
     }
 
-    private var tagEditor: some View {
-        HStack(alignment: .center, spacing: 9) {
-            TextField("Tag name", text: $draftName)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.primary)
-                .focused($tagNameFocused)
-                .onSubmit {
-                    saveDraft()
-                }
-                .padding(.horizontal, 10)
-                .frame(minWidth: 120, maxWidth: 190, minHeight: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color(nsColor: .textBackgroundColor).opacity(0.68))
-                )
+    private var existingTagsPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Existing tags")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.secondary)
 
-            HStack(spacing: 5) {
+            TagFlowLayout(spacing: 7, rowSpacing: 7) {
+                ForEach(availableTagsToAdd) { tag in
+                    Button {
+                        addExisting(tag)
+                    } label: {
+                        StaticTaskTagChip(tag: tag)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add \(tag.name)")
+                }
+            }
+        }
+    }
+
+    private func tagEditor(title: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.secondary)
+
+            HStack(alignment: .center, spacing: 9) {
+                TextField("Tag name", text: $draftName)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.primary)
+                    .focused($tagNameFocused)
+                    .onSubmit {
+                        saveDraft()
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(minWidth: 120, maxWidth: .infinity, minHeight: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(nsColor: .textBackgroundColor).opacity(0.68))
+                    )
+
+                Button {
+                    saveDraft()
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(canSaveDraft ? .secondary : .tertiary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSaveDraft)
+                .help("Save tag")
+            }
+
+            TagFlowLayout(spacing: 7, rowSpacing: 7) {
                 ForEach(TaskTagPalette.allCases) { palette in
                     Button {
                         draftColorName = palette.rawValue
@@ -111,7 +164,7 @@ struct TaskTagsEditorView: View {
                             .overlay {
                                 Circle()
                                     .stroke(
-                                        palette.foreground.opacity(draftColorName == palette.rawValue ? 0.75 : 0.0),
+                                        palette.foreground.opacity(draftColorName == palette.rawValue ? 0.78 : 0.0),
                                         lineWidth: 1.5
                                     )
                             }
@@ -129,42 +182,29 @@ struct TaskTagsEditorView: View {
                     .help(palette.displayName)
                 }
             }
-
-            Spacer(minLength: 4)
-
-            Button {
-                saveDraft()
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(canSaveDraft ? .secondary : .tertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSaveDraft)
-            .help("Save tag")
-
-            Button {
-                cancelEditing()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Cancel")
         }
-        .padding(.leading, 2)
         .onAppear {
             tagNameFocused = true
         }
     }
 
-    private var isEditing: Bool {
-        isAdding || editingTagID != nil
+    private var availableTagsToAdd: [TaskTagRecord] {
+        let currentNames = Set(tags.map { normalizedTagName($0.name) })
+        var seenNames = Set<String>()
+        var results: [TaskTagRecord] = []
+
+        for tag in availableTags {
+            let normalizedName = normalizedTagName(tag.name)
+
+            guard !normalizedName.isEmpty, !currentNames.contains(normalizedName), !seenNames.contains(normalizedName) else {
+                continue
+            }
+
+            seenNames.insert(normalizedName)
+            results.append(tag)
+        }
+
+        return results
     }
 
     private var canSaveDraft: Bool {
@@ -176,10 +216,7 @@ struct TaskTagsEditorView: View {
         draftName = ""
         draftColorName = TaskTagPalette.gray.rawValue
 
-        withAnimation(.smooth(duration: 0.18)) {
-            isAdding = true
-        }
-
+        isAddPopoverPresented = true
         tagNameFocused = true
     }
 
@@ -188,10 +225,7 @@ struct TaskTagsEditorView: View {
         draftName = tag.name
         draftColorName = TaskTagPalette.palette(for: tag.colorName).rawValue
 
-        withAnimation(.smooth(duration: 0.18)) {
-            isAdding = false
-        }
-
+        isEditPopoverPresented = true
         tagNameFocused = true
     }
 
@@ -220,16 +254,33 @@ struct TaskTagsEditorView: View {
         }
 
         updateTags(updatedTags)
-        cancelEditing()
+        dismissPopovers()
     }
 
-    private func cancelEditing() {
-        withAnimation(.smooth(duration: 0.18)) {
-            isAdding = false
-            editingTagID = nil
-            draftName = ""
-            draftColorName = TaskTagPalette.gray.rawValue
+    private func addExisting(_ tag: TaskTagRecord) {
+        let nextOrder = (tags.map(\.sortOrder).max() ?? -1) + 1
+        var tagCopy = TaskTagRecord(
+            name: tag.name,
+            colorName: TaskTagPalette.palette(for: tag.colorName).rawValue,
+            isEnabled: true,
+            sortOrder: nextOrder
+        )
+        tagCopy.name = tagCopy.name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !tagCopy.name.isEmpty else {
+            return
         }
+
+        updateTags(tags + [tagCopy])
+        dismissPopovers()
+    }
+
+    private func dismissPopovers() {
+        isAddPopoverPresented = false
+        isEditPopoverPresented = false
+        editingTagID = nil
+        draftName = ""
+        draftColorName = TaskTagPalette.gray.rawValue
 
         tagNameFocused = false
     }
@@ -238,13 +289,17 @@ struct TaskTagsEditorView: View {
         updateTags(tags.filter { $0.id != tag.id })
 
         if editingTagID == tag.id {
-            cancelEditing()
+            dismissPopovers()
         }
     }
 
     private func updateTags(_ newTags: [TaskTagRecord]) {
         tags = newTags
         onTagsChanged()
+    }
+
+    private func normalizedTagName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
 
@@ -257,47 +312,50 @@ private struct TaskTagChip: View {
     @State private var isActionHovered = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(tag.name)
-                .font(.system(size: 11, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            HStack(spacing: 1) {
-                chipActionButton(
-                    systemName: "pencil",
-                    help: "Edit tag",
-                    action: onEdit
-                )
-
-                chipActionButton(
-                    systemName: "xmark",
-                    help: "Delete tag",
-                    action: onDelete
-                )
+        StaticTaskTagChip(tag: tag)
+            .overlay(alignment: .trailing) {
+                tagMenu
+                    .opacity(actionsVisible ? 1 : 0)
+                    .allowsHitTesting(actionsVisible)
+                    .offset(x: 11)
+                    .onHover { hovered in
+                        withAnimation(.smooth(duration: 0.12)) {
+                            isActionHovered = hovered
+                        }
+                    }
             }
-            .opacity(actionsVisible ? 1 : 0)
-            .allowsHitTesting(actionsVisible)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .onHover { hovered in
                 withAnimation(.smooth(duration: 0.12)) {
-                    isActionHovered = hovered
+                    isHovered = hovered
                 }
             }
-        }
-        .foregroundStyle(palette.foreground)
-        .padding(.leading, 8)
-        .padding(.trailing, 3)
-        .frame(height: 22)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(palette.background)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .onHover { hovered in
-            withAnimation(.smooth(duration: 0.12)) {
-                isHovered = hovered
+    }
+
+    private var tagMenu: some View {
+        Menu {
+            Button("Edit") {
+                onEdit()
             }
+
+            Button("Delete", role: .destructive) {
+                onDelete()
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(palette.foreground)
+                .frame(width: 17, height: 17)
+                .background(
+                    Circle()
+                        .fill(palette.background)
+                        .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
+                )
+                .contentShape(Circle())
         }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Tag actions")
     }
 
     private var palette: TaskTagPalette {
@@ -307,20 +365,29 @@ private struct TaskTagChip: View {
     private var actionsVisible: Bool {
         isHovered || isActionHovered
     }
+}
 
-    private func chipActionButton(
-        systemName: String,
-        help: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 8, weight: .regular))
-                .frame(width: 15, height: 15)
-                .contentShape(Rectangle())
+private struct StaticTaskTagChip: View {
+    var tag: TaskTagRecord
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Text(tag.name)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .buttonStyle(.plain)
-        .help(help)
+        .foregroundStyle(palette.foreground)
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(palette.background)
+        )
+    }
+
+    private var palette: TaskTagPalette {
+        TaskTagPalette.palette(for: tag.colorName)
     }
 }
 

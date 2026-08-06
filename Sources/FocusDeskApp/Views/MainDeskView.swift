@@ -98,6 +98,26 @@ struct MainDeskView: View {
             .count
     }
 
+    private var availableTagRecords: [TaskTagRecord] {
+        var seenNames = Set<String>()
+        var uniqueTags: [TaskTagRecord] = []
+
+        for tag in tasks.flatMap(\.tagRecords) {
+            let normalizedName = tag.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+            guard !normalizedName.isEmpty, !seenNames.contains(normalizedName) else {
+                continue
+            }
+
+            seenNames.insert(normalizedName)
+            uniqueTags.append(tag)
+        }
+
+        return uniqueTags.sorted { lhs, rhs in
+            lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             HStack(spacing: 0) {
@@ -510,6 +530,7 @@ struct MainDeskView: View {
 
             ScrollView {
                 NewTaskWorkspaceView(
+                    availableTags: availableTagRecords,
                     onCreate: { draft in
                         createTask(draft)
                     },
@@ -568,6 +589,7 @@ struct MainDeskView: View {
                 VStack(spacing: 16) {
                     TaskFocusSummaryView(
                         task: task,
+                        availableTags: availableTagRecords,
                         onTaskChanged: saveContext,
                         onComplete: {
                             complete(task)
@@ -1681,6 +1703,7 @@ private enum NewTaskFocusField: Hashable {
 }
 
 private struct NewTaskWorkspaceView: View {
+    var availableTags: [TaskTagRecord]
     var onCreate: (NewTaskDraft) -> Void
     var onCancel: () -> Void
 
@@ -1779,7 +1802,7 @@ private struct NewTaskWorkspaceView: View {
 
             Spacer(minLength: 8)
 
-            TaskTagsEditorView(tags: $draft.tags)
+            TaskTagsEditorView(tags: $draft.tags, availableTags: availableTags)
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: panelHeight, alignment: .topLeading)
