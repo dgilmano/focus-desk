@@ -85,7 +85,7 @@ struct TaskFocusSummaryView: View {
                 availableTags: availableTags,
                 onTagsChanged: onTaskChanged
             )
-            .padding(.leading, -5)
+            .padding(.leading, -22)
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: summaryPanelHeight, alignment: .topLeading)

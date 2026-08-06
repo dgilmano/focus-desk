@@ -1803,7 +1803,7 @@ private struct NewTaskWorkspaceView: View {
             Spacer(minLength: 8)
 
             TaskTagsEditorView(tags: $draft.tags, availableTags: availableTags)
-                .padding(.leading, -5)
+                .padding(.leading, -22)
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: panelHeight, alignment: .topLeading)
