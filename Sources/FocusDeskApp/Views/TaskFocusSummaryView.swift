@@ -77,6 +77,8 @@ struct TaskFocusSummaryView: View {
             }
 
             Spacer(minLength: 8)
+
+            TaskTagsView(task: task, onTagsChanged: onTaskChanged)
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: summaryPanelHeight, alignment: .topLeading)

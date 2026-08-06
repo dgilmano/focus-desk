@@ -566,8 +566,6 @@ struct MainDeskView: View {
                         .id("summary-\(task.id.uuidString)")
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
 
-                    TaskTagsView(task: task, onTagsChanged: saveContext)
-
                     MotivationBlockView(task: task, onMotivationChanged: saveContext)
 
                     TaskCardView(
@@ -1702,8 +1700,6 @@ private struct NewTaskWorkspaceView: View {
                 }
             }
 
-            TaskTagsEditorView(tags: $draft.tags)
-
             oneLineBlock(
                 text: $draft.motivation,
                 placeholder: "Your motivation",
@@ -1772,6 +1768,8 @@ private struct NewTaskWorkspaceView: View {
             )
 
             Spacer(minLength: 8)
+
+            TaskTagsEditorView(tags: $draft.tags)
         }
         .padding(22)
         .frame(maxWidth: .infinity, minHeight: panelHeight, alignment: .topLeading)

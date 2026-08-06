@@ -41,9 +41,6 @@ struct TaskTagsEditorView: View {
                 ForEach(tags) { tag in
                     TaskTagChip(
                         tag: tag,
-                        onToggle: {
-                            toggle(tag)
-                        },
                         onEdit: {
                             beginEditing(tag)
                         },
@@ -62,14 +59,7 @@ struct TaskTagsEditorView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OrbStyle.sidebarBackground)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
         .animation(.smooth(duration: 0.18), value: tags)
         .animation(.smooth(duration: 0.18), value: isEditing)
     }
@@ -80,18 +70,14 @@ struct TaskTagsEditorView: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(.system(size: 9, weight: .regular))
 
                 Text("Tag")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 11, weight: .regular))
             }
             .foregroundStyle(.tertiary)
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.secondary.opacity(0.09))
-            )
+            .padding(.horizontal, 2)
+            .frame(height: 22)
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -248,17 +234,6 @@ struct TaskTagsEditorView: View {
         tagNameFocused = false
     }
 
-    private func toggle(_ tag: TaskTagRecord) {
-        var updatedTags = tags
-
-        guard let index = updatedTags.firstIndex(where: { $0.id == tag.id }) else {
-            return
-        }
-
-        updatedTags[index].isEnabled.toggle()
-        updateTags(updatedTags)
-    }
-
     private func delete(_ tag: TaskTagRecord) {
         updateTags(tags.filter { $0.id != tag.id })
 
@@ -275,7 +250,6 @@ struct TaskTagsEditorView: View {
 
 private struct TaskTagChip: View {
     var tag: TaskTagRecord
-    var onToggle: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
 
@@ -285,17 +259,11 @@ private struct TaskTagChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(tag.name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
             HStack(spacing: 1) {
-                chipActionButton(
-                    systemName: tag.isEnabled ? "eye" : "eye.slash",
-                    help: tag.isEnabled ? "Disable tag" : "Enable tag",
-                    action: onToggle
-                )
-
                 chipActionButton(
                     systemName: "pencil",
                     help: "Edit tag",
@@ -316,13 +284,13 @@ private struct TaskTagChip: View {
                 }
             }
         }
-        .foregroundStyle(palette.foreground.opacity(tag.isEnabled ? 1 : 0.62))
-        .padding(.leading, 11)
-        .padding(.trailing, 5)
-        .frame(height: 28)
+        .foregroundStyle(palette.foreground)
+        .padding(.leading, 8)
+        .padding(.trailing, 3)
+        .frame(height: 22)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(palette.background.opacity(tag.isEnabled ? 1 : 0.54))
+                .fill(palette.background)
         )
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onHover { hovered in
@@ -347,8 +315,8 @@ private struct TaskTagChip: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 10, weight: .regular))
-                .frame(width: 18, height: 18)
+                .font(.system(size: 8, weight: .regular))
+                .frame(width: 15, height: 15)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
