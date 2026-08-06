@@ -963,10 +963,12 @@ private struct ManageTaskRow: View {
                     .lineLimit(1)
 
                 if !task.details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(task.details)
-                        .font(.system(size: 13, weight: .regular))
+                    MarkdownText(
+                        task.details,
+                        font: .system(size: 13, weight: .regular),
+                        lineLimit: 1
+                    )
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
 
                 Text(rowMetadata)
@@ -1588,10 +1590,12 @@ private struct SummaryJournalEntryRow: View {
                     .lineLimit(1)
             }
 
-            Text(item.entry.note)
-                .font(.system(size: 13, weight: .regular))
+            MarkdownText(
+                item.entry.note,
+                font: .system(size: 13, weight: .regular),
+                lineLimit: 2
+            )
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)

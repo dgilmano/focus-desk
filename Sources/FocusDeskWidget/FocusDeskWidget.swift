@@ -56,7 +56,7 @@ struct FocusDeskWidgetView: View {
             Spacer(minLength: 4)
 
             if let note = entry.snapshot.latestProgressNote, !note.isEmpty {
-                Text(note)
+                Text(MarkdownFormatting.attributedString(from: note))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)

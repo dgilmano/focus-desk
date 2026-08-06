@@ -64,10 +64,12 @@ struct TaskFocusSummaryView: View {
                     .accessibilityAddTraits(.isHeader)
 
                 if !task.details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(task.details)
-                        .font(.system(size: 15, weight: .regular))
+                    MarkdownText(
+                        task.details,
+                        font: .system(size: 15, weight: .regular),
+                        lineLimit: 4
+                    )
                         .foregroundStyle(.secondary)
-                        .lineLimit(4)
                         .minimumScaleFactor(0.72)
                         .allowsTightening(true)
                         .truncationMode(.tail)
@@ -121,10 +123,12 @@ struct TaskFocusSummaryView: View {
             if isEditingNextStep {
                 nextStepEditor
             } else {
-                Text(nextStepText)
-                    .font(.system(size: 13, weight: .regular))
+                MarkdownText(
+                    nextStepText,
+                    font: .system(size: 13, weight: .regular),
+                    lineLimit: usesCompactLayout ? 4 : 8
+                )
                     .foregroundStyle(.tertiary)
-                    .lineLimit(usesCompactLayout ? 4 : 8)
                     .minimumScaleFactor(0.78)
                     .allowsTightening(true)
                     .truncationMode(.tail)

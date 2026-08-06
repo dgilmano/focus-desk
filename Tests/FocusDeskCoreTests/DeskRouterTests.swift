@@ -66,4 +66,23 @@ final class DeskRouterTests: XCTestCase {
 
         XCTAssertEqual(date?.timeIntervalSince1970, 1785700860)
     }
+
+    func testMarkdownFormattingPreservesReadableTaskListLayout() {
+        let markdown = """
+        Next:
+        - **Call** client
+        - `Ship` patch
+        """
+
+        let rendered = MarkdownFormatting.attributedString(from: markdown)
+
+        XCTAssertEqual(
+            String(rendered.characters),
+            """
+            Next:
+            - Call client
+            - Ship patch
+            """
+        )
+    }
 }

@@ -44,8 +44,7 @@ struct TaskHistoryView: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
 
-                        Text(entry.note)
-                            .font(.body)
+                        MarkdownText(entry.note, font: .body)
                             .textSelection(.enabled)
                     }
                     .padding(.vertical, 6)

@@ -27,10 +27,12 @@ struct TaskCardView: View {
                             .accessibilityAddTraits(.isHeader)
 
                         if !task.details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(task.details)
-                                .font(.system(size: 15))
+                            MarkdownText(
+                                task.details,
+                                font: .system(size: 15),
+                                lineLimit: 3
+                            )
                                 .foregroundStyle(.secondary)
-                                .lineLimit(3)
                         }
                     }
                 }
@@ -229,10 +231,12 @@ private struct ProgressEntryRow: View {
             if isEditing {
                 noteEditor
             } else {
-                Text(entry.note)
-                    .font(.system(size: 13, weight: .regular))
+                MarkdownText(
+                    entry.note,
+                    font: .system(size: 13, weight: .regular),
+                    lineLimit: isExpanded ? nil : collapsedNoteLineLimit
+                )
                     .foregroundStyle(.secondary)
-                    .lineLimit(isExpanded ? nil : collapsedNoteLineLimit)
                     .textSelection(.enabled)
             }
 

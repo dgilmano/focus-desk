@@ -277,10 +277,12 @@ private struct TaskManagerRow<Actions: View>: View {
                     .lineLimit(1)
 
                 if !task.details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(task.details)
-                        .font(.system(size: 13))
+                    MarkdownText(
+                        task.details,
+                        font: .system(size: 13),
+                        lineLimit: 1
+                    )
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
 
                 Text(rowMetadata)
