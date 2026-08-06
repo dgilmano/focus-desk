@@ -68,38 +68,72 @@ struct TaskTagsEditorView: View {
     }
 
     private var addTagButton: some View {
-        Button {
-            beginAdding()
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .regular))
+        HStack(spacing: 5) {
+            Image(systemName: "plus")
+                .font(.system(size: 9, weight: .regular))
 
-                Text("Tag")
-                    .font(.system(size: 11, weight: .regular))
-            }
-            .foregroundStyle(.tertiary)
-            .padding(.horizontal, 2)
-            .frame(height: 22)
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text("Tag")
+                .font(.system(size: 11, weight: .regular))
         }
-        .buttonStyle(.plain)
+        .foregroundStyle(.tertiary)
+        .padding(.horizontal, 2)
+        .frame(height: 22)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onTapGesture {
+            if isAddPopoverPresented {
+                dismissPopovers()
+            } else {
+                beginAdding()
+            }
+        }
         .help("Add tag")
-        .popover(
-            isPresented: $isAddPopoverPresented,
-            attachmentAnchor: .point(.bottomTrailing),
-            arrowEdge: .top
-        ) {
-            VStack(alignment: .leading, spacing: 14) {
-                if !availableTagsToAdd.isEmpty {
-                    existingTagsPicker
-                }
-
-                tagEditor(title: "New tag")
+        .overlay(alignment: .topLeading) {
+            if isAddPopoverPresented {
+                addTagPopover
+                    .offset(x: 58, y: 34)
+                    .zIndex(20)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
             }
-            .frame(width: 360)
-            .padding(14)
         }
+    }
+
+    private var addTagPopover: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                Text("Add tag")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    dismissPopovers()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Close")
+            }
+
+            if !availableTagsToAdd.isEmpty {
+                existingTagsPicker
+            }
+
+            tagEditor(title: "New tag")
+        }
+        .padding(14)
+        .frame(width: 360)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.secondary.opacity(0.18), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 10)
+        .fixedSize(horizontal: true, vertical: true)
     }
 
     private var existingTagsPicker: some View {
