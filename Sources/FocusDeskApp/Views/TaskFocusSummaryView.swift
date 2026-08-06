@@ -87,7 +87,9 @@ struct TaskFocusSummaryView: View {
             )
             .padding(.leading, -22)
         }
-        .padding(22)
+        .padding(.horizontal, 22)
+        .padding(.top, 22)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, minHeight: summaryPanelHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
