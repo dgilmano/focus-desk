@@ -326,6 +326,7 @@ private struct TaskTagChip: View {
 
     @State private var isHovered = false
     @State private var isActionHovered = false
+    @State private var hideActionsTask: Task<Void, Never>?
 
     var body: some View {
         StaticTaskTagChip(tag: tag)
@@ -335,16 +336,15 @@ private struct TaskTagChip: View {
                     .allowsHitTesting(actionsVisible)
                     .offset(y: 18)
                     .onHover { hovered in
-                        withAnimation(.smooth(duration: 0.12)) {
-                            isActionHovered = hovered
-                        }
+                        updateHoverState(.actions, hovered)
                     }
             }
             .contentShape(Rectangle())
             .onHover { hovered in
-                withAnimation(.smooth(duration: 0.12)) {
-                    isHovered = hovered
-                }
+                updateHoverState(.chip, hovered)
+            }
+            .onDisappear {
+                hideActionsTask?.cancel()
             }
     }
 
@@ -398,6 +398,47 @@ private struct TaskTagChip: View {
 
     private var actionsVisible: Bool {
         isHovered || isActionHovered
+    }
+
+    private func updateHoverState(_ region: TagHoverRegion, _ hovered: Bool) {
+        hideActionsTask?.cancel()
+
+        if hovered {
+            setHoverState(region, true)
+            return
+        }
+
+        hideActionsTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(180))
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await MainActor.run {
+                setHoverState(region, false)
+            }
+        }
+    }
+
+    private func setHoverState(_ region: TagHoverRegion, _ hovered: Bool) {
+        withAnimation(.smooth(duration: 0.12)) {
+            switch region {
+            case .chip:
+                isHovered = hovered
+            case .actions:
+                isActionHovered = hovered
+            }
+        }
+    }
+
+    private enum TagHoverRegion {
+        case chip
+        case actions
     }
 }
 
