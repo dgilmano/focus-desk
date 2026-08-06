@@ -1,0 +1,583 @@
+import FocusDeskCore
+import SwiftUI
+
+struct TaskTagsView: View {
+    @Bindable var task: FocusTask
+    var onTagsChanged: () -> Void
+
+    var body: some View {
+        TaskTagsEditorView(
+            tags: tagBinding,
+            onTagsChanged: onTagsChanged
+        )
+    }
+
+    private var tagBinding: Binding<[TaskTagRecord]> {
+        Binding(
+            get: {
+                task.tagRecords
+            },
+            set: { newValue in
+                task.tagRecords = newValue
+                task.updatedAt = Date()
+            }
+        )
+    }
+}
+
+struct TaskTagsEditorView: View {
+    @Binding var tags: [TaskTagRecord]
+    var onTagsChanged: () -> Void = {}
+
+    @State private var editingTagID: UUID?
+    @State private var draftName = ""
+    @State private var draftColorName = TaskTagPalette.gray.rawValue
+    @State private var isAdding = false
+    @FocusState private var tagNameFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TagFlowLayout(spacing: 7, rowSpacing: 7) {
+                ForEach(tags) { tag in
+                    TaskTagChip(
+                        tag: tag,
+                        onToggle: {
+                            toggle(tag)
+                        },
+                        onEdit: {
+                            beginEditing(tag)
+                        },
+                        onDelete: {
+                            delete(tag)
+                        }
+                    )
+                }
+
+                addTagButton
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if isEditing {
+                tagEditor
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(OrbStyle.sidebarBackground)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .animation(.smooth(duration: 0.18), value: tags)
+        .animation(.smooth(duration: 0.18), value: isEditing)
+    }
+
+    private var addTagButton: some View {
+        Button {
+            beginAdding()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .regular))
+
+                Text("Tag")
+                    .font(.system(size: 13, weight: .regular))
+            }
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.secondary.opacity(0.09))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help("Add tag")
+    }
+
+    private var tagEditor: some View {
+        HStack(alignment: .center, spacing: 9) {
+            TextField("Tag name", text: $draftName)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(.primary)
+                .focused($tagNameFocused)
+                .onSubmit {
+                    saveDraft()
+                }
+                .padding(.horizontal, 10)
+                .frame(minWidth: 120, maxWidth: 190, minHeight: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(nsColor: .textBackgroundColor).opacity(0.68))
+                )
+
+            HStack(spacing: 5) {
+                ForEach(TaskTagPalette.allCases) { palette in
+                    Button {
+                        draftColorName = palette.rawValue
+                    } label: {
+                        Circle()
+                            .fill(palette.background)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        palette.foreground.opacity(draftColorName == palette.rawValue ? 0.75 : 0.0),
+                                        lineWidth: 1.5
+                                    )
+                            }
+                            .overlay {
+                                if draftColorName == palette.rawValue {
+                                    Circle()
+                                        .fill(palette.foreground)
+                                        .frame(width: 5, height: 5)
+                                }
+                            }
+                            .frame(width: 18, height: 18)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(palette.displayName)
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                saveDraft()
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(canSaveDraft ? .secondary : .tertiary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSaveDraft)
+            .help("Save tag")
+
+            Button {
+                cancelEditing()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Cancel")
+        }
+        .padding(.leading, 2)
+        .onAppear {
+            tagNameFocused = true
+        }
+    }
+
+    private var isEditing: Bool {
+        isAdding || editingTagID != nil
+    }
+
+    private var canSaveDraft: Bool {
+        !draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func beginAdding() {
+        editingTagID = nil
+        draftName = ""
+        draftColorName = TaskTagPalette.gray.rawValue
+
+        withAnimation(.smooth(duration: 0.18)) {
+            isAdding = true
+        }
+
+        tagNameFocused = true
+    }
+
+    private func beginEditing(_ tag: TaskTagRecord) {
+        editingTagID = tag.id
+        draftName = tag.name
+        draftColorName = TaskTagPalette.palette(for: tag.colorName).rawValue
+
+        withAnimation(.smooth(duration: 0.18)) {
+            isAdding = false
+        }
+
+        tagNameFocused = true
+    }
+
+    private func saveDraft() {
+        let trimmedName = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            return
+        }
+
+        var updatedTags = tags
+
+        if let editingTagID, let index = updatedTags.firstIndex(where: { $0.id == editingTagID }) {
+            updatedTags[index].name = trimmedName
+            updatedTags[index].colorName = draftColorName
+        } else {
+            let nextOrder = (updatedTags.map(\.sortOrder).max() ?? -1) + 1
+            updatedTags.append(
+                TaskTagRecord(
+                    name: trimmedName,
+                    colorName: draftColorName,
+                    isEnabled: true,
+                    sortOrder: nextOrder
+                )
+            )
+        }
+
+        updateTags(updatedTags)
+        cancelEditing()
+    }
+
+    private func cancelEditing() {
+        withAnimation(.smooth(duration: 0.18)) {
+            isAdding = false
+            editingTagID = nil
+            draftName = ""
+            draftColorName = TaskTagPalette.gray.rawValue
+        }
+
+        tagNameFocused = false
+    }
+
+    private func toggle(_ tag: TaskTagRecord) {
+        var updatedTags = tags
+
+        guard let index = updatedTags.firstIndex(where: { $0.id == tag.id }) else {
+            return
+        }
+
+        updatedTags[index].isEnabled.toggle()
+        updateTags(updatedTags)
+    }
+
+    private func delete(_ tag: TaskTagRecord) {
+        updateTags(tags.filter { $0.id != tag.id })
+
+        if editingTagID == tag.id {
+            cancelEditing()
+        }
+    }
+
+    private func updateTags(_ newTags: [TaskTagRecord]) {
+        tags = newTags
+        onTagsChanged()
+    }
+}
+
+private struct TaskTagChip: View {
+    var tag: TaskTagRecord
+    var onToggle: () -> Void
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    @State private var isHovered = false
+    @State private var isActionHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(tag.name)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            HStack(spacing: 1) {
+                chipActionButton(
+                    systemName: tag.isEnabled ? "eye" : "eye.slash",
+                    help: tag.isEnabled ? "Disable tag" : "Enable tag",
+                    action: onToggle
+                )
+
+                chipActionButton(
+                    systemName: "pencil",
+                    help: "Edit tag",
+                    action: onEdit
+                )
+
+                chipActionButton(
+                    systemName: "xmark",
+                    help: "Delete tag",
+                    action: onDelete
+                )
+            }
+            .opacity(actionsVisible ? 1 : 0)
+            .allowsHitTesting(actionsVisible)
+            .onHover { hovered in
+                withAnimation(.smooth(duration: 0.12)) {
+                    isActionHovered = hovered
+                }
+            }
+        }
+        .foregroundStyle(palette.foreground.opacity(tag.isEnabled ? 1 : 0.62))
+        .padding(.leading, 11)
+        .padding(.trailing, 5)
+        .frame(height: 28)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(palette.background.opacity(tag.isEnabled ? 1 : 0.54))
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onHover { hovered in
+            withAnimation(.smooth(duration: 0.12)) {
+                isHovered = hovered
+            }
+        }
+    }
+
+    private var palette: TaskTagPalette {
+        TaskTagPalette.palette(for: tag.colorName)
+    }
+
+    private var actionsVisible: Bool {
+        isHovered || isActionHovered
+    }
+
+    private func chipActionButton(
+        systemName: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .regular))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+private struct TagFlowLayout: Layout {
+    var spacing: CGFloat
+    var rowSpacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let availableWidth = proposal.width ?? CGFloat.greatestFiniteMagnitude
+        let rows = rows(for: subviews, availableWidth: availableWidth)
+        let width = proposal.width ?? rows.map(\.width).max() ?? 0
+        let height = rows.reduce(0) { partialResult, row in
+            partialResult + row.height
+        } + CGFloat(max(0, rows.count - 1)) * rowSpacing
+
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        let rows = rows(for: subviews, availableWidth: bounds.width)
+        var y = bounds.minY
+
+        for row in rows {
+            var x = bounds.minX
+
+            for item in row.items {
+                subviews[item.index].place(
+                    at: CGPoint(x: x, y: y),
+                    proposal: ProposedViewSize(item.size)
+                )
+                x += item.size.width + spacing
+            }
+
+            y += row.height + rowSpacing
+        }
+    }
+
+    private func rows(for subviews: Subviews, availableWidth: CGFloat) -> [TagFlowLayoutRow] {
+        var rows: [TagFlowLayoutRow] = []
+        var currentItems: [TagFlowLayoutItem] = []
+        var currentWidth: CGFloat = 0
+        var currentHeight: CGFloat = 0
+
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let proposedWidth = currentItems.isEmpty ? size.width : currentWidth + spacing + size.width
+
+            if !currentItems.isEmpty && proposedWidth > availableWidth {
+                rows.append(TagFlowLayoutRow(items: currentItems, width: currentWidth, height: currentHeight))
+                currentItems = []
+                currentWidth = 0
+                currentHeight = 0
+            }
+
+            currentItems.append(TagFlowLayoutItem(index: index, size: size))
+            currentWidth = currentItems.count == 1 ? size.width : currentWidth + spacing + size.width
+            currentHeight = max(currentHeight, size.height)
+        }
+
+        if !currentItems.isEmpty {
+            rows.append(TagFlowLayoutRow(items: currentItems, width: currentWidth, height: currentHeight))
+        }
+
+        return rows
+    }
+}
+
+private struct TagFlowLayoutRow {
+    var items: [TagFlowLayoutItem]
+    var width: CGFloat
+    var height: CGFloat
+}
+
+private struct TagFlowLayoutItem {
+    var index: Int
+    var size: CGSize
+}
+
+private enum TaskTagPalette: String, CaseIterable, Identifiable {
+    case gray
+    case pink
+    case rose
+    case green
+    case mint
+    case yellow
+    case blue
+    case purple
+    case orange
+    case brown
+
+    var id: String {
+        rawValue
+    }
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+
+    var background: Color {
+        switch self {
+        case .gray:
+            return adaptiveColor(
+                light: NSColor(calibratedWhite: 0.91, alpha: 1),
+                dark: NSColor(calibratedWhite: 0.26, alpha: 1)
+            )
+        case .pink:
+            return adaptiveColor(
+                light: NSColor(red: 0.96, green: 0.84, blue: 0.89, alpha: 1),
+                dark: NSColor(red: 0.36, green: 0.18, blue: 0.27, alpha: 1)
+            )
+        case .rose:
+            return adaptiveColor(
+                light: NSColor(red: 0.98, green: 0.84, blue: 0.82, alpha: 1),
+                dark: NSColor(red: 0.38, green: 0.17, blue: 0.15, alpha: 1)
+            )
+        case .green:
+            return adaptiveColor(
+                light: NSColor(red: 0.80, green: 0.89, blue: 0.82, alpha: 1),
+                dark: NSColor(red: 0.15, green: 0.31, blue: 0.22, alpha: 1)
+            )
+        case .mint:
+            return adaptiveColor(
+                light: NSColor(red: 0.80, green: 0.91, blue: 0.88, alpha: 1),
+                dark: NSColor(red: 0.13, green: 0.32, blue: 0.30, alpha: 1)
+            )
+        case .yellow:
+            return adaptiveColor(
+                light: NSColor(red: 0.95, green: 0.88, blue: 0.68, alpha: 1),
+                dark: NSColor(red: 0.38, green: 0.30, blue: 0.12, alpha: 1)
+            )
+        case .blue:
+            return adaptiveColor(
+                light: NSColor(red: 0.80, green: 0.89, blue: 0.98, alpha: 1),
+                dark: NSColor(red: 0.13, green: 0.25, blue: 0.39, alpha: 1)
+            )
+        case .purple:
+            return adaptiveColor(
+                light: NSColor(red: 0.88, green: 0.82, blue: 0.95, alpha: 1),
+                dark: NSColor(red: 0.28, green: 0.19, blue: 0.39, alpha: 1)
+            )
+        case .orange:
+            return adaptiveColor(
+                light: NSColor(red: 0.96, green: 0.84, blue: 0.75, alpha: 1),
+                dark: NSColor(red: 0.39, green: 0.22, blue: 0.13, alpha: 1)
+            )
+        case .brown:
+            return adaptiveColor(
+                light: NSColor(red: 0.88, green: 0.82, blue: 0.77, alpha: 1),
+                dark: NSColor(red: 0.31, green: 0.25, blue: 0.21, alpha: 1)
+            )
+        }
+    }
+
+    var foreground: Color {
+        switch self {
+        case .gray:
+            return adaptiveColor(
+                light: NSColor(calibratedWhite: 0.18, alpha: 1),
+                dark: NSColor(calibratedWhite: 0.88, alpha: 1)
+            )
+        case .pink:
+            return adaptiveColor(
+                light: NSColor(red: 0.43, green: 0.20, blue: 0.32, alpha: 1),
+                dark: NSColor(red: 0.96, green: 0.77, blue: 0.86, alpha: 1)
+            )
+        case .rose:
+            return adaptiveColor(
+                light: NSColor(red: 0.47, green: 0.20, blue: 0.17, alpha: 1),
+                dark: NSColor(red: 0.98, green: 0.76, blue: 0.72, alpha: 1)
+            )
+        case .green:
+            return adaptiveColor(
+                light: NSColor(red: 0.18, green: 0.38, blue: 0.27, alpha: 1),
+                dark: NSColor(red: 0.72, green: 0.91, blue: 0.78, alpha: 1)
+            )
+        case .mint:
+            return adaptiveColor(
+                light: NSColor(red: 0.14, green: 0.39, blue: 0.36, alpha: 1),
+                dark: NSColor(red: 0.70, green: 0.92, blue: 0.88, alpha: 1)
+            )
+        case .yellow:
+            return adaptiveColor(
+                light: NSColor(red: 0.43, green: 0.34, blue: 0.13, alpha: 1),
+                dark: NSColor(red: 0.96, green: 0.86, blue: 0.55, alpha: 1)
+            )
+        case .blue:
+            return adaptiveColor(
+                light: NSColor(red: 0.16, green: 0.34, blue: 0.53, alpha: 1),
+                dark: NSColor(red: 0.72, green: 0.86, blue: 0.99, alpha: 1)
+            )
+        case .purple:
+            return adaptiveColor(
+                light: NSColor(red: 0.31, green: 0.22, blue: 0.47, alpha: 1),
+                dark: NSColor(red: 0.87, green: 0.76, blue: 0.98, alpha: 1)
+            )
+        case .orange:
+            return adaptiveColor(
+                light: NSColor(red: 0.48, green: 0.27, blue: 0.16, alpha: 1),
+                dark: NSColor(red: 0.98, green: 0.79, blue: 0.64, alpha: 1)
+            )
+        case .brown:
+            return adaptiveColor(
+                light: NSColor(red: 0.36, green: 0.28, blue: 0.23, alpha: 1),
+                dark: NSColor(red: 0.88, green: 0.78, blue: 0.70, alpha: 1)
+            )
+        }
+    }
+
+    static func palette(for rawValue: String) -> TaskTagPalette {
+        TaskTagPalette(rawValue: rawValue) ?? .gray
+    }
+
+    private func adaptiveColor(light: NSColor, dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let matchedAppearance = appearance.bestMatch(from: [.aqua, .darkAqua])
+            return matchedAppearance == .darkAqua ? dark : light
+        })
+    }
+}

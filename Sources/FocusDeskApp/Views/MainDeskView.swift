@@ -566,6 +566,8 @@ struct MainDeskView: View {
                         .id("summary-\(task.id.uuidString)")
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
 
+                    TaskTagsView(task: task, onTagsChanged: saveContext)
+
                     MotivationBlockView(task: task, onMotivationChanged: saveContext)
 
                     TaskCardView(
@@ -617,12 +619,13 @@ struct MainDeskView: View {
             details: draft.details,
             nextStep: draft.nextStep,
             motivation: draft.motivation,
+            tags: draft.tags,
             initialJournalEntry: draft.initialJournalEntry
         )
     }
 
     private func createTask(title: String, details: String) {
-        createTask(title: title, details: details, nextStep: "", motivation: "", initialJournalEntry: "")
+        createTask(title: title, details: details, nextStep: "", motivation: "", tags: [], initialJournalEntry: "")
     }
 
     private func createTask(
@@ -630,6 +633,7 @@ struct MainDeskView: View {
         details: String,
         nextStep: String,
         motivation: String,
+        tags: [TaskTagRecord],
         initialJournalEntry: String
     ) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -651,7 +655,8 @@ struct MainDeskView: View {
             updatedAt: now,
             carouselOrder: nextOrder,
             motivation: trimmedMotivation.isEmpty ? nil : trimmedMotivation,
-            nextStep: trimmedNextStep.isEmpty ? nil : trimmedNextStep
+            nextStep: trimmedNextStep.isEmpty ? nil : trimmedNextStep,
+            tagData: TaskTagCoding.encode(tags)
         )
 
         if !trimmedJournalEntry.isEmpty {
@@ -1639,6 +1644,7 @@ private struct NewTaskDraft {
     var details = ""
     var nextStep = ""
     var motivation = ""
+    var tags: [TaskTagRecord] = []
     var initialJournalEntry = ""
 
     var canCreate: Bool {
@@ -1651,6 +1657,7 @@ private struct NewTaskDraft {
             details,
             nextStep,
             motivation,
+            TaskTagCoding.encode(tags) ?? "",
             initialJournalEntry
         ]
             .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -1694,6 +1701,8 @@ private struct NewTaskWorkspaceView: View {
                         .frame(minWidth: 0, maxWidth: .infinity)
                 }
             }
+
+            TaskTagsEditorView(tags: $draft.tags)
 
             oneLineBlock(
                 text: $draft.motivation,

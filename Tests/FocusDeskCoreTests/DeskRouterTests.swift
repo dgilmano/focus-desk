@@ -85,4 +85,16 @@ final class DeskRouterTests: XCTestCase {
             """
         )
     }
+
+    func testTaskTagCodingRoundTripsSortedTags() throws {
+        let second = TaskTagRecord(name: "BGP", colorName: "pink", sortOrder: 2)
+        let first = TaskTagRecord(name: "General", colorName: "gray", isEnabled: false, sortOrder: 1)
+
+        let encoded = try XCTUnwrap(TaskTagCoding.encode([second, first]))
+        let decoded = TaskTagCoding.decode(encoded)
+
+        XCTAssertEqual(decoded.map(\.name), ["General", "BGP"])
+        XCTAssertEqual(decoded.first?.colorName, "gray")
+        XCTAssertEqual(decoded.first?.isEnabled, false)
+    }
 }

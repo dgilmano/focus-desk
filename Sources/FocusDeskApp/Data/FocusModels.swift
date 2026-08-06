@@ -14,6 +14,7 @@ final class FocusTask: Identifiable {
     var motivation: String?
     var nextStep: String?
     var localDraft: String
+    var tagData: String?
 
     @Relationship(deleteRule: .cascade, inverse: \ProgressEntry.task)
     var entries: [ProgressEntry]
@@ -29,6 +30,7 @@ final class FocusTask: Identifiable {
         motivation: String? = nil,
         nextStep: String? = nil,
         localDraft: String = "",
+        tagData: String? = nil,
         entries: [ProgressEntry] = []
     ) {
         self.id = id
@@ -41,6 +43,7 @@ final class FocusTask: Identifiable {
         self.motivation = motivation
         self.nextStep = nextStep
         self.localDraft = localDraft
+        self.tagData = tagData
         self.entries = entries
     }
 }
@@ -69,6 +72,19 @@ extension FocusTask {
 
     var latestEntry: ProgressEntry? {
         newestEntries.first
+    }
+
+    var tagRecords: [TaskTagRecord] {
+        get {
+            TaskTagCoding.decode(tagData)
+        }
+        set {
+            tagData = TaskTagCoding.encode(newValue)
+        }
+    }
+
+    var enabledTagRecords: [TaskTagRecord] {
+        tagRecords.filter(\.isEnabled)
     }
 
     var snapshot: TaskSnapshot {
