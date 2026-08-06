@@ -89,8 +89,8 @@ struct TaskTagsEditorView: View {
         .help("Add tag")
         .popover(
             isPresented: $isAddPopoverPresented,
-            attachmentAnchor: .point(.trailing),
-            arrowEdge: .leading
+            attachmentAnchor: .point(.bottomTrailing),
+            arrowEdge: .trailing
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 if !availableTagsToAdd.isEmpty {
