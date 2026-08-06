@@ -41,7 +41,7 @@ struct TaskTagsEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TagFlowLayout(spacing: 7, rowSpacing: 7) {
+            TagFlowLayout(spacing: 7, rowSpacing: 11) {
                 ForEach(tags) { tag in
                     TaskTagChip(
                         tag: tag,
@@ -336,14 +336,14 @@ private struct TaskTagChip: View {
                 tagActionButtons
                     .opacity(actionsVisible ? 1 : 0)
                     .allowsHitTesting(actionsVisible)
-                    .offset(y: 13)
+                    .offset(y: 18)
                     .onHover { hovered in
                         withAnimation(.smooth(duration: 0.12)) {
                             isActionHovered = hovered
                         }
                     }
             }
-            .padding(.bottom, 22)
+            .padding(.bottom, 30)
             .contentShape(Rectangle())
             .onHover { hovered in
                 withAnimation(.smooth(duration: 0.12)) {
@@ -361,16 +361,16 @@ private struct TaskTagChip: View {
             )
 
             tagActionButton(
+                systemName: tag.isEnabled ? "eye.slash" : "eye",
+                help: tag.isEnabled ? "Hide tag" : "Show tag",
+                action: onToggleVisibility
+            )
+
+            tagActionButton(
                 systemName: "xmark",
                 help: "Delete tag",
                 isDestructive: true,
                 action: onDelete
-            )
-
-            tagActionButton(
-                systemName: tag.isEnabled ? "eye.slash" : "eye",
-                help: tag.isEnabled ? "Hide tag" : "Show tag",
-                action: onToggleVisibility
             )
         }
         .fixedSize()
@@ -386,7 +386,7 @@ private struct TaskTagChip: View {
             Image(systemName: systemName)
                 .font(.system(size: 8, weight: .medium))
                 .foregroundStyle(isDestructive ? Color.red.opacity(0.72) : Color.secondary)
-                .frame(width: 17, height: 17)
+                .frame(width: 18, height: 18)
                 .background(
                     Circle()
                         .fill(Color(nsColor: .windowBackgroundColor).opacity(0.78))
