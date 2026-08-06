@@ -87,9 +87,19 @@ struct TaskTagsEditorView: View {
         }
         .buttonStyle(.plain)
         .help("Add tag")
+        .overlay(alignment: .bottomTrailing) {
+            addTagPopoverAnchor
+                .offset(y: 22)
+        }
+    }
+
+    private var addTagPopoverAnchor: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityHidden(true)
         .popover(
             isPresented: $isAddPopoverPresented,
-            attachmentAnchor: .point(.bottomTrailing),
+            attachmentAnchor: .point(.center),
             arrowEdge: .trailing
         ) {
             VStack(alignment: .leading, spacing: 14) {
