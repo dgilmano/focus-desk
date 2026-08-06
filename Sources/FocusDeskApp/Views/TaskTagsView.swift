@@ -89,7 +89,7 @@ struct TaskTagsEditorView: View {
         .help("Add tag")
         .overlay(alignment: .bottomTrailing) {
             addTagPopoverAnchor
-                .offset(x: 72, y: 52)
+                .offset(x: 6, y: 52)
         }
     }
 
