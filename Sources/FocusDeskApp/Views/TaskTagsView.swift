@@ -41,13 +41,10 @@ struct TaskTagsEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TagFlowLayout(spacing: 7, rowSpacing: 11) {
+            TagFlowLayout(spacing: 7, rowSpacing: 22) {
                 ForEach(tags) { tag in
                     TaskTagChip(
                         tag: tag,
-                        onToggleVisibility: {
-                            toggleVisibility(tag)
-                        },
                         onEdit: {
                             beginEditing(tag)
                         },
@@ -292,17 +289,6 @@ struct TaskTagsEditorView: View {
         tagNameFocused = false
     }
 
-    private func toggleVisibility(_ tag: TaskTagRecord) {
-        var updatedTags = tags
-
-        guard let index = updatedTags.firstIndex(where: { $0.id == tag.id }) else {
-            return
-        }
-
-        updatedTags[index].isEnabled.toggle()
-        updateTags(updatedTags)
-    }
-
     private func delete(_ tag: TaskTagRecord) {
         updateTags(tags.filter { $0.id != tag.id })
 
@@ -323,7 +309,6 @@ struct TaskTagsEditorView: View {
 
 private struct TaskTagChip: View {
     var tag: TaskTagRecord
-    var onToggleVisibility: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
 
@@ -343,7 +328,6 @@ private struct TaskTagChip: View {
                         }
                     }
             }
-            .padding(.bottom, 30)
             .contentShape(Rectangle())
             .onHover { hovered in
                 withAnimation(.smooth(duration: 0.12)) {
@@ -358,12 +342,6 @@ private struct TaskTagChip: View {
                 systemName: "pencil",
                 help: "Edit tag",
                 action: onEdit
-            )
-
-            tagActionButton(
-                systemName: tag.isEnabled ? "eye.slash" : "eye",
-                help: tag.isEnabled ? "Hide tag" : "Show tag",
-                action: onToggleVisibility
             )
 
             tagActionButton(
@@ -421,12 +399,12 @@ private struct StaticTaskTagChip: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .foregroundStyle(palette.foreground.opacity(tag.isEnabled ? 1 : 0.55))
+        .foregroundStyle(palette.foreground)
         .padding(.horizontal, 8)
         .frame(height: 22)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(palette.background.opacity(tag.isEnabled ? 1 : 0.52))
+                .fill(palette.background)
         )
     }
 
