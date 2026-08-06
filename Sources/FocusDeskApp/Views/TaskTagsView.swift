@@ -45,6 +45,9 @@ struct TaskTagsEditorView: View {
                 ForEach(tags) { tag in
                     TaskTagChip(
                         tag: tag,
+                        onToggleVisibility: {
+                            toggleVisibility(tag)
+                        },
                         onEdit: {
                             beginEditing(tag)
                         },
@@ -85,7 +88,11 @@ struct TaskTagsEditorView: View {
         }
         .buttonStyle(.plain)
         .help("Add tag")
-        .popover(isPresented: $isAddPopoverPresented) {
+        .popover(
+            isPresented: $isAddPopoverPresented,
+            attachmentAnchor: .point(.bottomTrailing),
+            arrowEdge: .top
+        ) {
             VStack(alignment: .leading, spacing: 14) {
                 if !availableTagsToAdd.isEmpty {
                     existingTagsPicker
@@ -285,6 +292,17 @@ struct TaskTagsEditorView: View {
         tagNameFocused = false
     }
 
+    private func toggleVisibility(_ tag: TaskTagRecord) {
+        var updatedTags = tags
+
+        guard let index = updatedTags.firstIndex(where: { $0.id == tag.id }) else {
+            return
+        }
+
+        updatedTags[index].isEnabled.toggle()
+        updateTags(updatedTags)
+    }
+
     private func delete(_ tag: TaskTagRecord) {
         updateTags(tags.filter { $0.id != tag.id })
 
@@ -305,6 +323,7 @@ struct TaskTagsEditorView: View {
 
 private struct TaskTagChip: View {
     var tag: TaskTagRecord
+    var onToggleVisibility: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
 
@@ -313,18 +332,19 @@ private struct TaskTagChip: View {
 
     var body: some View {
         StaticTaskTagChip(tag: tag)
-            .overlay(alignment: .trailing) {
-                tagMenu
+            .overlay(alignment: .bottom) {
+                tagActionButtons
                     .opacity(actionsVisible ? 1 : 0)
                     .allowsHitTesting(actionsVisible)
-                    .offset(x: 11)
+                    .offset(y: 13)
                     .onHover { hovered in
                         withAnimation(.smooth(duration: 0.12)) {
                             isActionHovered = hovered
                         }
                     }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.bottom, 22)
+            .contentShape(Rectangle())
             .onHover { hovered in
                 withAnimation(.smooth(duration: 0.12)) {
                     isHovered = hovered
@@ -332,30 +352,54 @@ private struct TaskTagChip: View {
             }
     }
 
-    private var tagMenu: some View {
-        Menu {
-            Button("Edit") {
-                onEdit()
-            }
+    private var tagActionButtons: some View {
+        HStack(spacing: 5) {
+            tagActionButton(
+                systemName: "pencil",
+                help: "Edit tag",
+                action: onEdit
+            )
 
-            Button("Delete", role: .destructive) {
-                onDelete()
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(palette.foreground)
+            tagActionButton(
+                systemName: "xmark",
+                help: "Delete tag",
+                isDestructive: true,
+                action: onDelete
+            )
+
+            tagActionButton(
+                systemName: tag.isEnabled ? "eye.slash" : "eye",
+                help: tag.isEnabled ? "Hide tag" : "Show tag",
+                action: onToggleVisibility
+            )
+        }
+        .fixedSize()
+    }
+
+    private func tagActionButton(
+        systemName: String,
+        help: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundStyle(isDestructive ? Color.red.opacity(0.72) : Color.secondary)
                 .frame(width: 17, height: 17)
                 .background(
                     Circle()
-                        .fill(palette.background)
+                        .fill(Color(nsColor: .windowBackgroundColor).opacity(0.78))
+                        .overlay(
+                            Circle()
+                                .stroke(Color.secondary.opacity(0.12), lineWidth: 0.6)
+                        )
                         .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
                 )
                 .contentShape(Circle())
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Tag actions")
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private var palette: TaskTagPalette {
@@ -377,12 +421,12 @@ private struct StaticTaskTagChip: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .foregroundStyle(palette.foreground)
+        .foregroundStyle(palette.foreground.opacity(tag.isEnabled ? 1 : 0.55))
         .padding(.horizontal, 8)
         .frame(height: 22)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(palette.background)
+                .fill(palette.background.opacity(tag.isEnabled ? 1 : 0.52))
         )
     }
 
