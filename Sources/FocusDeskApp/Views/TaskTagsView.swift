@@ -97,21 +97,21 @@ struct TaskTagsEditorView: View {
         Color.clear
             .frame(width: 1, height: 1)
             .accessibilityHidden(true)
-        .popover(
-            isPresented: $isAddPopoverPresented,
-            attachmentAnchor: .point(.center),
-            arrowEdge: .top
-        ) {
-            VStack(alignment: .leading, spacing: 14) {
-                if !availableTagsToAdd.isEmpty {
-                    existingTagsPicker
-                }
+            .popover(
+                isPresented: $isAddPopoverPresented,
+                attachmentAnchor: .point(.center),
+                arrowEdge: .bottom
+            ) {
+                VStack(alignment: .leading, spacing: 14) {
+                    if !availableTagsToAdd.isEmpty {
+                        existingTagsPicker
+                    }
 
-                tagEditor(title: "New tag")
+                    tagEditor(title: "New tag")
+                }
+                .frame(width: 360)
+                .padding(14)
             }
-            .frame(width: 360)
-            .padding(14)
-        }
     }
 
     private var existingTagsPicker: some View {
