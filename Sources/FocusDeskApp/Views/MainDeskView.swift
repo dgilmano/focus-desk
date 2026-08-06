@@ -49,8 +49,9 @@ struct MainDeskView: View {
     private let router = DeskRouter()
     private let serverClock = OfflineFirstServerClock.environmentBacked()
     private let defaultSidebarWidth = 174.0
+    private let minExpandedSidebarWidth = 132.0
     private let maxSidebarWidth = 260.0
-    private let sidebarCollapseThreshold = 1.0
+    private let sidebarCollapseThreshold = 72.0
     private let workspaceHorizontalPadding = 28.0
 
     private var activeTasks: [FocusTask] {
@@ -136,7 +137,7 @@ struct MainDeskView: View {
         .animation(.spring(duration: 0.26, bounce: 0.12), value: isSidebarVisible)
         .animation(.spring(duration: 0.26, bounce: 0.12), value: sidebarWidth)
         .onAppear {
-            isSidebarVisible = sidebarWidth > sidebarCollapseThreshold
+            normalizeSidebarWidth()
             ensureValidSelection()
             refreshWidgetSnapshot()
             noteFocused = true
@@ -266,7 +267,7 @@ struct MainDeskView: View {
     private var sidebarResizeHandle: some View {
         Rectangle()
             .fill(Color.primary.opacity(0.001))
-            .frame(width: 12)
+            .frame(width: 18)
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .onHover { isHovering in
@@ -280,7 +281,7 @@ struct MainDeskView: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         if sidebarDragStartWidth == nil {
-                            sidebarDragStartWidth = sidebarWidth
+                            sidebarDragStartWidth = max(sidebarWidth, minExpandedSidebarWidth)
                         }
 
                         let startWidth = sidebarDragStartWidth ?? sidebarWidth
@@ -292,6 +293,7 @@ struct MainDeskView: View {
             )
             .padding(.top, 4)
             .padding(.bottom, 8)
+            .offset(x: 9)
     }
 
     private func sidebarToggleButton(systemImage: String, action: @escaping () -> Void) -> some View {
@@ -308,13 +310,21 @@ struct MainDeskView: View {
     }
 
     private func setSidebarWidth(_ width: Double) {
-        let clampedWidth = min(max(width, 0), maxSidebarWidth)
-
-        if clampedWidth <= sidebarCollapseThreshold {
+        if width <= sidebarCollapseThreshold {
             sidebarWidth = 0
             isSidebarVisible = false
         } else {
-            sidebarWidth = clampedWidth
+            sidebarWidth = min(max(width, minExpandedSidebarWidth), maxSidebarWidth)
+            isSidebarVisible = true
+        }
+    }
+
+    private func normalizeSidebarWidth() {
+        if sidebarWidth <= sidebarCollapseThreshold {
+            sidebarWidth = 0
+            isSidebarVisible = false
+        } else {
+            sidebarWidth = min(max(sidebarWidth, minExpandedSidebarWidth), maxSidebarWidth)
             isSidebarVisible = true
         }
     }
