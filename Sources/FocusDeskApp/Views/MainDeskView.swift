@@ -1287,13 +1287,20 @@ private struct SummaryWorkspaceView: View {
     var onOpen: (FocusTask) -> Void
     var onCreate: () -> Void
 
+    @State private var selectedJournalDate: Date?
+
     private var metrics: LocalSummaryMetrics {
         LocalSummaryMetrics(
             tasks: tasks,
             activeTasks: activeTasks,
             completedTasks: completedTasks,
-            now: now
+            now: now,
+            journalDate: journalReferenceDate
         )
+    }
+
+    private var journalReferenceDate: Date {
+        selectedJournalDate ?? now
     }
 
     var body: some View {
@@ -1337,7 +1344,7 @@ private struct SummaryWorkspaceView: View {
             } else {
                 tagActivityPanel
                 needsAttentionPanel
-                todayJournalPanel
+                journalPanel
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1455,32 +1462,58 @@ private struct SummaryWorkspaceView: View {
         }
     }
 
-    private var todayJournalPanel: some View {
+    private var journalPanel: some View {
         OrbGroupedPanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Today journal")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(SummaryDateFormatting.journalTitle(for: journalReferenceDate, relativeTo: now))
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(.primary)
+
+                        Text(SummaryDateFormatting.dayString(from: journalReferenceDate))
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.tertiary)
+                    }
 
                     Spacer()
 
-                    Text("\(metrics.journalEntriesToday.count)")
+                    Text("\(metrics.journalEntriesForSelectedDay.count)")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(.tertiary)
+
+                    HStack(spacing: 2) {
+                        journalNavigationButton(
+                            systemName: "chevron.left",
+                            help: "Previous journal day",
+                            isDisabled: previousJournalDate == nil
+                        ) {
+                            if let previousJournalDate {
+                                selectedJournalDate = previousJournalDate
+                            }
+                        }
+
+                        journalNavigationButton(
+                            systemName: "chevron.right",
+                            help: "Next journal day",
+                            isDisabled: !canNavigateForward
+                        ) {
+                            selectedJournalDate = nextJournalDate
+                        }
+                    }
                 }
 
-                if metrics.journalEntriesToday.isEmpty {
-                    Text("No journal entries today.")
+                if metrics.journalEntriesForSelectedDay.isEmpty {
+                    Text("No journal entries for this day.")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                 } else {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(metrics.journalEntriesToday.enumerated()), id: \.element.entry.id) { index, item in
+                        ForEach(Array(metrics.journalEntriesForSelectedDay.enumerated()), id: \.element.entry.id) { index, item in
                             SummaryJournalEntryRow(item: item)
 
-                            if index < metrics.journalEntriesToday.count - 1 {
+                            if index < metrics.journalEntriesForSelectedDay.count - 1 {
                                 Divider()
                             }
                         }
@@ -1490,11 +1523,55 @@ private struct SummaryWorkspaceView: View {
             .padding(18)
         }
     }
+
+    private func journalNavigationButton(
+        systemName: String,
+        help: String,
+        isDisabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(isDisabled ? .tertiary : .secondary)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .help(help)
+    }
+
+    private var previousJournalDate: Date? {
+        metrics.journalDayStarts.last { $0 < selectedJournalDayStart }
+    }
+
+    private var nextJournalDate: Date? {
+        if let nextJournalDay = metrics.journalDayStarts.first(where: { $0 > selectedJournalDayStart && $0 <= todayStart }) {
+            return nextJournalDay
+        }
+
+        return canNavigateForward ? nil : selectedJournalDate
+    }
+
+    private var canNavigateForward: Bool {
+        selectedJournalDayStart < todayStart
+    }
+
+    private var selectedJournalDayStart: Date {
+        Calendar.current.startOfDay(for: journalReferenceDate)
+    }
+
+    private var todayStart: Date {
+        Calendar.current.startOfDay(for: now)
+    }
 }
 
 private struct LocalSummaryMetrics {
     var allJournalEntries: [SummaryJournalEntry]
     var journalEntriesToday: [SummaryJournalEntry]
+    var journalEntriesForSelectedDay: [SummaryJournalEntry]
+    var journalDayStarts: [Date]
     var completedToday: [FocusTask]
     var inactiveTasks: [FocusTask]
     var latestJournalEntry: SummaryJournalEntry?
@@ -1506,11 +1583,14 @@ private struct LocalSummaryMetrics {
         activeTasks: [FocusTask],
         completedTasks: [FocusTask],
         now: Date,
+        journalDate: Date,
         calendar: Calendar = .current
     ) {
         self.now = now
         let startOfDay = calendar.startOfDay(for: now)
         let todayInterval = DateInterval(start: startOfDay, end: now)
+        let selectedDayStart = calendar.startOfDay(for: journalDate)
+        let selectedDayEnd = calendar.date(byAdding: .day, value: 1, to: selectedDayStart) ?? now
 
         let allEntries = tasks
             .flatMap { task in
@@ -1526,6 +1606,15 @@ private struct LocalSummaryMetrics {
         journalEntriesToday = allEntries.filter { item in
             item.entry.timestamp >= startOfDay && item.entry.timestamp <= now
         }
+        journalEntriesForSelectedDay = allEntries.filter { item in
+            item.entry.timestamp >= selectedDayStart && item.entry.timestamp < selectedDayEnd
+        }
+        journalDayStarts = Array(
+            Set(allEntries.map { item in
+                calendar.startOfDay(for: item.entry.timestamp)
+            })
+        )
+        .sorted()
         completedToday = completedTasks.filter { task in
             guard let completedAt = task.completedAt else {
                 return false
@@ -1825,6 +1914,29 @@ private enum SummaryDateFormatting {
     static func shortTimeString(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    static func journalTitle(for date: Date, relativeTo referenceDate: Date, calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: referenceDate) {
+            return "Today journal"
+        }
+
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: referenceDate) else {
+            return "\(dayString(from: date)) journal"
+        }
+
+        if calendar.isDate(date, inSameDayAs: yesterday) {
+            return "Yesterday journal"
+        }
+
+        return "\(dayString(from: date)) journal"
+    }
+
+    static func dayString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
         return formatter.string(from: date)
     }
 
