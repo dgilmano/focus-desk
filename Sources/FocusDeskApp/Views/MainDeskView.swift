@@ -68,6 +68,8 @@ struct MainDeskView: View {
     private let maxSidebarWidth = 260.0
     private let sidebarCollapseThreshold = 72.0
     private let workspaceHorizontalPadding = 28.0
+    private let hiddenSidebarToggleLeadingPadding = 116.0
+    private let hiddenSidebarToolbarLeadingPadding = 156.0
 
     private var activeTasks: [FocusTask] {
         tasks
@@ -178,7 +180,7 @@ struct MainDeskView: View {
                     showSidebar()
                 }
                 .padding(.top, 10)
-                .padding(.leading, 116)
+                .padding(.leading, hiddenSidebarToggleLeadingPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
@@ -509,7 +511,8 @@ struct MainDeskView: View {
             .labelStyle(.iconOnly)
             .help(isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme")
         }
-        .padding(.horizontal, 28)
+        .padding(.leading, detailToolbarLeadingPadding)
+        .padding(.trailing, workspaceHorizontalPadding)
         .padding(.top, 30)
         .padding(.bottom, 18)
         .contentShape(Rectangle())
@@ -533,6 +536,10 @@ struct MainDeskView: View {
         case let .tag(normalizedName):
             return tagTitle(for: normalizedName)
         }
+    }
+
+    private var detailToolbarLeadingPadding: Double {
+        isSidebarVisible ? workspaceHorizontalPadding : hiddenSidebarToolbarLeadingPadding
     }
 
     private var toolbarSubtitle: String {
