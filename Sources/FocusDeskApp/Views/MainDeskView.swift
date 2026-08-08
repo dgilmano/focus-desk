@@ -47,6 +47,9 @@ struct MainDeskView: View {
     @AppStorage("isDarkTheme")
     private var isDarkTheme = false
 
+    @AppStorage("isTagsSidebarSectionExpanded")
+    private var isTagsSidebarSectionExpanded = true
+
     @AppStorage("googleOAuthClientID")
     private var googleOAuthClientID = ""
 
@@ -290,17 +293,21 @@ struct MainDeskView: View {
                     }
                 }
 
-                FocusDeskSidebarSection(title: "Tags") {
+                FocusDeskSidebarSection(title: "Tags", isExpanded: $isTagsSidebarSectionExpanded) {
                     if sidebarTagItems.isEmpty {
                         SidebarEmptyLabel("No tags yet")
                     } else {
                         ForEach(sidebarTagItems) { item in
+                            let palette = TaskTagPalette.palette(for: item.tag.colorName)
+
                             FocusDeskSidebarButton(
                                 title: item.tag.name,
-                                systemImage: "number",
+                                systemImage: "tag.fill",
                                 isSelected: selectedSection == .tag(item.normalizedName),
                                 count: item.activeTaskCount,
-                                iconColor: TaskTagPalette.palette(for: item.tag.colorName).foreground
+                                iconColor: palette.foreground,
+                                swatchColor: palette.background,
+                                swatchBorderColor: palette.foreground
                             ) {
                                 selectedSection = .tag(item.normalizedName)
                             }

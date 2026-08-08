@@ -63,19 +63,72 @@ struct FocusDeskIcon: View {
 
 struct FocusDeskSidebarSection<Content: View>: View {
     var title: String
+    var isExpanded: Binding<Bool>?
     @ViewBuilder var content: () -> Content
+
+    init(
+        title: String,
+        isExpanded: Binding<Bool>? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.isExpanded = isExpanded
+        self.content = content
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
+            sectionHeader
+
+            if isSectionExpanded {
+                VStack(spacing: 1) {
+                    content()
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var sectionHeader: some View {
+        HStack(spacing: 4) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(FocusDeskStyle.sectionHeadingForeground)
-                .padding(.horizontal, 8)
 
-            VStack(spacing: 1) {
-                content()
+            Spacer(minLength: 0)
+
+            if let isExpanded {
+                Button {
+                    withAnimation(.smooth(duration: 0.16)) {
+                        isExpanded.wrappedValue.toggle()
+                    }
+                } label: {
+                    Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isExpanded.wrappedValue ? "Collapse \(title)" : "Expand \(title)")
             }
         }
+        .padding(.horizontal, 8)
+        .frame(height: 18)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let isExpanded else {
+                return
+            }
+
+            withAnimation(.smooth(duration: 0.16)) {
+                isExpanded.wrappedValue.toggle()
+            }
+        }
+    }
+
+    private var isSectionExpanded: Bool {
+        isExpanded?.wrappedValue ?? true
     }
 }
 
@@ -85,16 +138,14 @@ struct FocusDeskSidebarButton: View {
     var isSelected: Bool = false
     var count: Int?
     var iconColor: Color = .secondary
+    var swatchColor: Color?
+    var swatchBorderColor: Color?
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 7) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .regular))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(iconColor)
-                    .frame(width: 16, height: 16)
+                sidebarIcon
 
                 Text(title)
                     .font(.system(size: 12, weight: .regular))
@@ -122,6 +173,26 @@ struct FocusDeskSidebarButton: View {
             .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var sidebarIcon: some View {
+        if let swatchColor {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(swatchColor)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke((swatchBorderColor ?? iconColor).opacity(0.34), lineWidth: 0.8)
+                }
+                .frame(width: 12, height: 12)
+                .frame(width: 16, height: 16)
+        } else {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .regular))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(iconColor)
+                .frame(width: 16, height: 16)
+        }
     }
 }
 
