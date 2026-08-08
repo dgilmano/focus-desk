@@ -2163,7 +2163,7 @@ private struct NewTaskWorkspaceView: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $draft.details)
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.primary)
                     .scrollContentBackground(.hidden)
                     .padding(8)
                     .frame(minHeight: usesCompactLayout ? 48 : 64)
@@ -2207,7 +2207,7 @@ private struct NewTaskWorkspaceView: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $draft.nextStep)
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.primary)
                     .scrollContentBackground(.hidden)
                     .padding(8)
                     .frame(minHeight: usesCompactLayout ? 88 : 108)
@@ -2248,7 +2248,7 @@ private struct NewTaskWorkspaceView: View {
             TextField("", text: text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.primary)
                 .focused($focusedField, equals: focusField)
                 .accessibilityLabel(placeholder)
 
@@ -2351,7 +2351,7 @@ private struct MotivationBlockView: View {
             TextField("", text: motivationText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.primary)
                 .accessibilityLabel("Your motivation")
 
             if currentMotivation.isEmpty {

@@ -99,7 +99,7 @@ private struct WorkDoneInputBlock: View {
                 TextField("", text: $task.localDraft)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.primary)
                     .accessibilityLabel("What was done")
                     .focused(noteFocused)
                     .onChange(of: task.localDraft) {

@@ -138,7 +138,7 @@ struct TaskFocusSummaryView: View {
                     font: .system(size: 13, weight: .regular),
                     lineLimit: usesCompactLayout ? 4 : 8
                 )
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(currentNextStep.isEmpty ? .tertiary : .primary)
                     .minimumScaleFactor(0.78)
                     .allowsTightening(true)
                     .truncationMode(.tail)
@@ -193,7 +193,7 @@ struct TaskFocusSummaryView: View {
         ZStack(alignment: .topLeading) {
             TextEditor(text: nextStepBinding)
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(minHeight: usesCompactLayout ? 58 : 88)
