@@ -40,17 +40,17 @@ struct TaskEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 12) {
-                OrbIcon(systemName: modeIcon, filled: true)
+                FocusDeskIcon(systemName: modeIcon, filled: true)
 
                 Text(mode.title)
                     .font(.system(size: 24, weight: .semibold))
             }
 
-            OrbGroupedPanel {
+            FocusDeskGroupedPanel {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Title")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(OrbStyle.sectionHeadingForeground)
+                        .foregroundStyle(FocusDeskStyle.sectionHeadingForeground)
 
                     TextField("Title", text: $title)
                         .textFieldStyle(.plain)
@@ -63,7 +63,7 @@ struct TaskEditorSheet: View {
 
                     Text("Description")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(OrbStyle.sectionHeadingForeground)
+                        .foregroundStyle(FocusDeskStyle.sectionHeadingForeground)
 
                     TextEditor(text: $details)
                         .font(.system(size: 15))
@@ -101,7 +101,7 @@ struct TaskEditorSheet: View {
         }
         .padding(24)
         .frame(width: 460)
-        .background(OrbStyle.appBackground)
+        .background(FocusDeskStyle.appBackground)
     }
 
     private var modeIcon: String {

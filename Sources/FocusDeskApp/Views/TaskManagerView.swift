@@ -4,7 +4,7 @@ import SwiftUI
 struct TaskManagerView: View {
     @Environment(\.modelContext) private var modelContext
 
-    @Query(sort: \FocusTask.carouselOrder, order: .forward)
+    @Query(sort: \FocusTask.sortOrder, order: .forward)
     private var tasks: [FocusTask]
 
     @AppStorage("currentTaskID")
@@ -33,7 +33,7 @@ struct TaskManagerView: View {
             header
 
             HStack(spacing: 0) {
-                OrbPillSegment(
+                FocusDeskPillSegment(
                     title: "Active",
                     systemImage: "rectangle.stack",
                     value: TaskManagerTab.active,
@@ -41,10 +41,10 @@ struct TaskManagerView: View {
                 )
 
                 Rectangle()
-                    .fill(OrbStyle.hairline)
+                    .fill(FocusDeskStyle.hairline)
                     .frame(width: 1, height: 24)
 
-                OrbPillSegment(
+                FocusDeskPillSegment(
                     title: "Completed",
                     systemImage: "checkmark.circle",
                     value: TaskManagerTab.completed,
@@ -52,7 +52,7 @@ struct TaskManagerView: View {
                 )
             }
             .padding(5)
-            .background(OrbStyle.groupedBackground)
+            .background(FocusDeskStyle.groupedBackground)
             .clipShape(Capsule(style: .continuous))
             .padding(.horizontal, 24)
             .padding(.bottom, 14)
@@ -75,7 +75,7 @@ struct TaskManagerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(OrbStyle.appBackground)
+        .background(FocusDeskStyle.appBackground)
         .sheet(isPresented: $showingNewTask) {
             TaskEditorSheet(mode: .create) { title, details in
                 createTask(title: title, details: details)
@@ -202,14 +202,14 @@ struct TaskManagerView: View {
     }
 
     private func createTask(title: String, details: String) {
-        let nextOrder = (tasks.map(\.carouselOrder).max() ?? -1) + 1
+        let nextOrder = (tasks.map(\.sortOrder).max() ?? -1) + 1
         let now = Date()
         let task = FocusTask(
             title: title,
             details: details,
             createdAt: now,
             updatedAt: now,
-            carouselOrder: nextOrder
+            sortOrder: nextOrder
         )
 
         modelContext.insert(task)
@@ -266,7 +266,7 @@ private struct TaskManagerRow<Actions: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            OrbIcon(
+            FocusDeskIcon(
                 systemName: task.completedAt == nil ? "rectangle.stack" : "checkmark.circle",
                 filled: true
             )
@@ -301,7 +301,7 @@ private struct TaskManagerRow<Actions: View>: View {
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(OrbStyle.groupedBackground)
+                .fill(FocusDeskStyle.groupedBackground)
         )
     }
 

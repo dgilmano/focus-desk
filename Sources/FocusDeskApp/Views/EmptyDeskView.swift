@@ -5,7 +5,7 @@ struct EmptyDeskView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            OrbIcon(systemName: "rectangle.stack", filled: true)
+            FocusDeskIcon(systemName: "rectangle.stack", filled: true)
                 .scaleEffect(1.35)
 
             Text("No active tasks")
@@ -22,7 +22,7 @@ struct EmptyDeskView: View {
         .padding(32)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(OrbStyle.groupedBackground)
+                .fill(FocusDeskStyle.groupedBackground)
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(28)

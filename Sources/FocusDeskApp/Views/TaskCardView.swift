@@ -16,7 +16,7 @@ struct TaskCardView: View {
         VStack(alignment: .leading, spacing: 18) {
             if showsHeader {
                 HStack(alignment: .top, spacing: 14) {
-                    OrbIcon(systemName: "target", filled: true)
+                    FocusDeskIcon(systemName: "target", filled: true)
                         .padding(.top, 5)
 
                     VStack(alignment: .leading, spacing: 7) {
@@ -46,7 +46,7 @@ struct TaskCardView: View {
                 onSaveJournalEntry: onSaveJournalEntry
             )
 
-            OrbGroupedPanel {
+            FocusDeskGroupedPanel {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Journal")
                         .font(.system(size: 13, weight: .regular))
@@ -134,7 +134,7 @@ private struct WorkDoneInputBlock: View {
         .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OrbStyle.sidebarBackground)
+                .fill(FocusDeskStyle.sidebarBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
@@ -164,7 +164,7 @@ private struct TaskProgressView: View {
     }
 
     var body: some View {
-        OrbGroupedPanel {
+        FocusDeskGroupedPanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("Task Progress")

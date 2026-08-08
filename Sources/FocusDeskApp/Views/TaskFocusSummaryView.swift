@@ -93,7 +93,7 @@ struct TaskFocusSummaryView: View {
         .frame(maxWidth: .infinity, minHeight: summaryPanelHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(OrbStyle.groupedBackground.opacity(0.78))
+                .fill(FocusDeskStyle.groupedBackground.opacity(0.78))
         )
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onHover { isHovered in
@@ -157,7 +157,7 @@ struct TaskFocusSummaryView: View {
         .frame(maxWidth: .infinity, minHeight: summaryPanelHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OrbStyle.sidebarBackground)
+                .fill(FocusDeskStyle.sidebarBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))

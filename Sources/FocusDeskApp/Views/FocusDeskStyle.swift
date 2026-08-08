@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum OrbStyle {
+enum FocusDeskStyle {
     static var appBackground: Color {
         Color(nsColor: .windowBackgroundColor)
     }
@@ -42,7 +42,7 @@ enum OrbStyle {
     }
 }
 
-struct OrbIcon: View {
+struct FocusDeskIcon: View {
     var systemName: String
     var filled: Bool = false
 
@@ -61,7 +61,7 @@ struct OrbIcon: View {
     }
 }
 
-struct OrbSidebarSection<Content: View>: View {
+struct FocusDeskSidebarSection<Content: View>: View {
     var title: String
     @ViewBuilder var content: () -> Content
 
@@ -69,7 +69,7 @@ struct OrbSidebarSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(OrbStyle.sectionHeadingForeground)
+                .foregroundStyle(FocusDeskStyle.sectionHeadingForeground)
                 .padding(.horizontal, 8)
 
             VStack(spacing: 1) {
@@ -79,7 +79,7 @@ struct OrbSidebarSection<Content: View>: View {
     }
 }
 
-struct OrbSidebarButton: View {
+struct FocusDeskSidebarButton: View {
     var title: String
     var systemImage: String
     var isSelected: Bool = false
@@ -116,7 +116,7 @@ struct OrbSidebarButton: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(OrbStyle.selectedBackground)
+                        .fill(FocusDeskStyle.selectedBackground)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
@@ -142,7 +142,7 @@ struct SidebarEmptyLabel: View {
     }
 }
 
-struct OrbGroupedPanel<Content: View>: View {
+struct FocusDeskGroupedPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -150,12 +150,12 @@ struct OrbGroupedPanel<Content: View>: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OrbStyle.groupedBackground)
+        .background(FocusDeskStyle.groupedBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
-struct OrbActionRow: View {
+struct FocusDeskActionRow: View {
     var title: String
     var systemImage: String
     var showsChevron: Bool = true
@@ -164,7 +164,7 @@ struct OrbActionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                OrbIcon(systemName: systemImage, filled: true)
+                FocusDeskIcon(systemName: systemImage, filled: true)
 
                 Text(title)
                     .font(.system(size: 17, weight: .medium))
@@ -186,7 +186,7 @@ struct OrbActionRow: View {
     }
 }
 
-struct OrbPillSegment<Selection: Hashable>: View {
+struct FocusDeskPillSegment<Selection: Hashable>: View {
     var title: String
     var systemImage: String
     var value: Selection
@@ -213,7 +213,7 @@ struct OrbPillSegment<Selection: Hashable>: View {
             .background {
                 if isSelected {
                     Capsule(style: .continuous)
-                        .fill(OrbStyle.selectedBackground)
+                        .fill(FocusDeskStyle.selectedBackground)
                 }
             }
             .contentShape(Capsule(style: .continuous))

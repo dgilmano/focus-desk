@@ -26,7 +26,7 @@ private struct SidebarTagItem: Identifiable {
 struct MainDeskView: View {
     @Environment(\.modelContext) private var modelContext
 
-    @Query(sort: \FocusTask.carouselOrder, order: .forward)
+    @Query(sort: \FocusTask.sortOrder, order: .forward)
     private var tasks: [FocusTask]
 
     @AppStorage("currentTaskID")
@@ -70,11 +70,11 @@ struct MainDeskView: View {
         tasks
             .filter { $0.completedAt == nil }
             .sorted { lhs, rhs in
-                if lhs.carouselOrder == rhs.carouselOrder {
+                if lhs.sortOrder == rhs.sortOrder {
                     return lhs.createdAt < rhs.createdAt
                 }
 
-                return lhs.carouselOrder < rhs.carouselOrder
+                return lhs.sortOrder < rhs.sortOrder
             }
     }
 
@@ -155,9 +155,9 @@ struct MainDeskView: View {
 
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(OrbStyle.appBackground)
+                    .background(FocusDeskStyle.appBackground)
             }
-            .background(OrbStyle.appBackground)
+            .background(FocusDeskStyle.appBackground)
             .ignoresSafeArea(edges: .top)
             .background(WindowChromeConfigurator())
 
@@ -221,7 +221,7 @@ struct MainDeskView: View {
     private var sidebar: some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OrbStyle.sidebarBackground)
+                .fill(FocusDeskStyle.sidebarBackground)
                 .padding(.leading, 4)
                 .padding(.top, 4)
                 .padding(.bottom, 8)
@@ -235,8 +235,8 @@ struct MainDeskView: View {
                     .padding(.horizontal, 14)
                     .padding(.top, 48)
 
-                OrbSidebarSection(title: "Focus") {
-                    OrbSidebarButton(
+                FocusDeskSidebarSection(title: "Focus") {
+                    FocusDeskSidebarButton(
                         title: "Desk",
                         systemImage: "circle.dashed",
                         isSelected: selectedSection == .desk,
@@ -247,7 +247,7 @@ struct MainDeskView: View {
                         ensureValidSelection()
                     }
 
-                    OrbSidebarButton(
+                    FocusDeskSidebarButton(
                         title: "New Task",
                         systemImage: "plus.square.on.square",
                         isSelected: selectedSection == .newTask,
@@ -258,8 +258,8 @@ struct MainDeskView: View {
                     .keyboardShortcut("n", modifiers: [.command])
                 }
 
-                OrbSidebarSection(title: "Manage") {
-                    OrbSidebarButton(
+                FocusDeskSidebarSection(title: "Manage") {
+                    FocusDeskSidebarButton(
                         title: "Tasks",
                         systemImage: "tray.full",
                         isSelected: selectedSection == .tasks,
@@ -269,7 +269,7 @@ struct MainDeskView: View {
                         selectedSection = .tasks
                     }
 
-                    OrbSidebarButton(
+                    FocusDeskSidebarButton(
                         title: "Completed",
                         systemImage: "checkmark.circle",
                         isSelected: selectedSection == .completed,
@@ -279,7 +279,7 @@ struct MainDeskView: View {
                         selectedSection = .completed
                     }
 
-                    OrbSidebarButton(
+                    FocusDeskSidebarButton(
                         title: "Summary",
                         systemImage: "chart.bar.xaxis",
                         isSelected: selectedSection == .summary,
@@ -290,12 +290,12 @@ struct MainDeskView: View {
                     }
                 }
 
-                OrbSidebarSection(title: "Tags") {
+                FocusDeskSidebarSection(title: "Tags") {
                     if sidebarTagItems.isEmpty {
                         SidebarEmptyLabel("No tags yet")
                     } else {
                         ForEach(sidebarTagItems) { item in
-                            OrbSidebarButton(
+                            FocusDeskSidebarButton(
                                 title: item.tag.name,
                                 systemImage: "number",
                                 isSelected: selectedSection == .tag(item.normalizedName),
@@ -736,14 +736,14 @@ struct MainDeskView: View {
             return
         }
 
-        let nextOrder = (tasks.map(\.carouselOrder).max() ?? -1) + 1
+        let nextOrder = (tasks.map(\.sortOrder).max() ?? -1) + 1
         let now = Date()
         let task = FocusTask(
             title: trimmedTitle,
             details: trimmedDetails,
             createdAt: now,
             updatedAt: now,
-            carouselOrder: nextOrder,
+            sortOrder: nextOrder,
             motivation: trimmedMotivation.isEmpty ? nil : trimmedMotivation,
             nextStep: trimmedNextStep.isEmpty ? nil : trimmedNextStep,
             tagData: TaskTagCoding.encode(tags)
@@ -1040,9 +1040,9 @@ private struct ManageWorkspaceView: View {
     }
 
     private var emptyState: some View {
-        OrbGroupedPanel {
+        FocusDeskGroupedPanel {
             VStack(spacing: 10) {
-                OrbIcon(systemName: mode.emptyIcon, filled: true)
+                FocusDeskIcon(systemName: mode.emptyIcon, filled: true)
 
                 Text(mode.emptyTitle)
                     .font(.system(size: 17, weight: .semibold))
@@ -1077,7 +1077,7 @@ private struct ManageTaskRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            OrbIcon(
+            FocusDeskIcon(
                 systemName: mode == .completed ? "checkmark.circle" : "rectangle.stack",
                 filled: true
             )
@@ -1131,7 +1131,7 @@ private struct ManageTaskRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(OrbStyle.groupedBackground)
+                .fill(FocusDeskStyle.groupedBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -1203,7 +1203,7 @@ private struct CloudAccountSidebarView: View {
     var body: some View {
         VStack(spacing: 10) {
             Rectangle()
-                .fill(OrbStyle.hairline)
+                .fill(FocusDeskStyle.hairline)
                 .frame(height: 1)
 
             Button(action: action) {
@@ -1278,7 +1278,7 @@ private struct GoogleCloudSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
-                OrbIcon(systemName: "person.crop.circle.badge.plus", filled: true)
+                FocusDeskIcon(systemName: "person.crop.circle.badge.plus", filled: true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Google Cloud Sync")
@@ -1290,7 +1290,7 @@ private struct GoogleCloudSettingsView: View {
                 }
             }
 
-            OrbGroupedPanel {
+            FocusDeskGroupedPanel {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("OAuth Client ID")
                         .font(.system(size: 13, weight: .regular))
@@ -1313,7 +1313,7 @@ private struct GoogleCloudSettingsView: View {
                 .padding(18)
             }
 
-            OrbGroupedPanel {
+            FocusDeskGroupedPanel {
                 VStack(alignment: .leading, spacing: 10) {
                     settingsRow(title: "Provider", value: "Google")
                     settingsRow(title: "Storage", value: "Drive app data")
@@ -1339,7 +1339,7 @@ private struct GoogleCloudSettingsView: View {
         }
         .padding(24)
         .frame(width: 500)
-        .background(OrbStyle.appBackground)
+        .background(FocusDeskStyle.appBackground)
     }
 
     private func settingsRow(title: String, value: String) -> some View {
@@ -1439,9 +1439,9 @@ private struct SummaryWorkspaceView: View {
     }
 
     private var emptySummaryState: some View {
-        OrbGroupedPanel {
+        FocusDeskGroupedPanel {
             VStack(spacing: 10) {
-                OrbIcon(systemName: "chart.bar.xaxis", filled: true)
+                FocusDeskIcon(systemName: "chart.bar.xaxis", filled: true)
 
                 Text("No summary yet")
                     .font(.system(size: 17, weight: .semibold))
@@ -1465,7 +1465,7 @@ private struct SummaryWorkspaceView: View {
     }
 
     private var tagActivityPanel: some View {
-        OrbGroupedPanel {
+        FocusDeskGroupedPanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -1509,7 +1509,7 @@ private struct SummaryWorkspaceView: View {
     }
 
     private var needsAttentionPanel: some View {
-        OrbGroupedPanel {
+        FocusDeskGroupedPanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Needs attention")
@@ -1551,7 +1551,7 @@ private struct SummaryWorkspaceView: View {
     }
 
     private var journalPanel: some View {
-        OrbGroupedPanel {
+        FocusDeskGroupedPanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -1772,7 +1772,7 @@ private struct SummaryMetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                OrbIcon(systemName: systemImage, filled: true)
+                FocusDeskIcon(systemName: systemImage, filled: true)
 
                 Spacer()
             }
@@ -1800,7 +1800,7 @@ private struct SummaryMetricCard: View {
         .frame(maxWidth: .infinity, minHeight: 136, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(OrbStyle.groupedBackground)
+                .fill(FocusDeskStyle.groupedBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -1825,7 +1825,7 @@ private struct TagActivityChart: View {
         .chartXAxis {
             AxisMarks(position: .bottom) { value in
                 AxisGridLine()
-                    .foregroundStyle(OrbStyle.hairline)
+                    .foregroundStyle(FocusDeskStyle.hairline)
 
                 AxisValueLabel {
                     if let minutes = value.as(Double.self) {
@@ -1904,7 +1904,7 @@ private struct SummaryTaskAttentionRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            OrbIcon(systemName: "clock", filled: false)
+            FocusDeskIcon(systemName: "clock", filled: false)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
@@ -2186,7 +2186,7 @@ private struct NewTaskWorkspaceView: View {
         .frame(maxWidth: .infinity, minHeight: panelHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(OrbStyle.groupedBackground.opacity(0.78))
+                .fill(FocusDeskStyle.groupedBackground.opacity(0.78))
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -2227,7 +2227,7 @@ private struct NewTaskWorkspaceView: View {
         .frame(maxWidth: .infinity, minHeight: panelHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OrbStyle.sidebarBackground)
+                .fill(FocusDeskStyle.sidebarBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
@@ -2256,7 +2256,7 @@ private struct NewTaskWorkspaceView: View {
         .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OrbStyle.sidebarBackground)
+                .fill(FocusDeskStyle.sidebarBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
@@ -2358,7 +2358,7 @@ private struct MotivationBlockView: View {
         .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(OrbStyle.sidebarBackground)
+                .fill(FocusDeskStyle.sidebarBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }

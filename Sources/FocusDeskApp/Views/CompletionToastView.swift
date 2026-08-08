@@ -6,7 +6,7 @@ struct CompletionToastView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            OrbIcon(systemName: "checkmark.circle", filled: true)
+            FocusDeskIcon(systemName: "checkmark.circle", filled: true)
 
             Text("Task completed")
                 .font(.system(size: 14, weight: .semibold))
@@ -19,7 +19,7 @@ struct CompletionToastView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(OrbStyle.groupedBackground)
+        .background(FocusDeskStyle.groupedBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Task completed. Undo available.")

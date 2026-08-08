@@ -16,7 +16,7 @@ public struct TaskSnapshot: Codable, Equatable, Sendable, Identifiable {
     public var id: UUID
     public var title: String
     public var details: String
-    public var carouselOrder: Int
+    public var sortOrder: Int
     public var createdAt: Date
     public var updatedAt: Date
     public var completedAt: Date?
@@ -27,7 +27,7 @@ public struct TaskSnapshot: Codable, Equatable, Sendable, Identifiable {
         id: UUID = UUID(),
         title: String,
         details: String = "",
-        carouselOrder: Int,
+        sortOrder: Int,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         completedAt: Date? = nil,
@@ -37,7 +37,7 @@ public struct TaskSnapshot: Codable, Equatable, Sendable, Identifiable {
         self.id = id
         self.title = title
         self.details = details
-        self.carouselOrder = carouselOrder
+        self.sortOrder = sortOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.completedAt = completedAt
@@ -57,11 +57,11 @@ public struct DeskRouter: Sendable {
         tasks
             .filter(\.isActive)
             .sorted { lhs, rhs in
-                if lhs.carouselOrder == rhs.carouselOrder {
+                if lhs.sortOrder == rhs.sortOrder {
                     return lhs.createdAt < rhs.createdAt
                 }
 
-                return lhs.carouselOrder < rhs.carouselOrder
+                return lhs.sortOrder < rhs.sortOrder
             }
     }
 
@@ -114,7 +114,7 @@ public struct OfflineFirstServerClock: ServerClock {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> OfflineFirstServerClock {
         guard
-            let rawURL = environment["FOCUS_DESK_SERVER_TIME_URL"] ?? environment["FOCUS_CAROUSEL_SERVER_TIME_URL"],
+            let rawURL = environment["FOCUS_DESK_SERVER_TIME_URL"],
             let url = URL(string: rawURL)
         else {
             return OfflineFirstServerClock()
@@ -197,8 +197,8 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
 }
 
 public struct WidgetSnapshotStore: Sendable {
-    public static let appGroupIdentifier = "group.com.focuscarousel.app"
-    private static let snapshotKey = "focus-carousel.widget-snapshot"
+    public static let appGroupIdentifier = "group.com.focusdesk.app"
+    private static let snapshotKey = "focusdesk.widget-snapshot"
 
     private let suiteName: String
 

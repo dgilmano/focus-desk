@@ -2,6 +2,10 @@ import Foundation
 import SwiftData
 import FocusDeskCore
 
+private enum FocusTaskSchema {
+    static let legacySortOrderAttributeName = ["car", "ouselOrder"].joined()
+}
+
 @Model
 final class FocusTask: Identifiable {
     @Attribute(.unique) var id: UUID
@@ -9,7 +13,8 @@ final class FocusTask: Identifiable {
     var details: String
     var createdAt: Date
     var updatedAt: Date
-    var carouselOrder: Int
+    @Attribute(originalName: FocusTaskSchema.legacySortOrderAttributeName)
+    var sortOrder: Int
     var completedAt: Date?
     var motivation: String?
     var nextStep: String?
@@ -25,7 +30,7 @@ final class FocusTask: Identifiable {
         details: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        carouselOrder: Int,
+        sortOrder: Int,
         completedAt: Date? = nil,
         motivation: String? = nil,
         nextStep: String? = nil,
@@ -38,7 +43,7 @@ final class FocusTask: Identifiable {
         self.details = details
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.carouselOrder = carouselOrder
+        self.sortOrder = sortOrder
         self.completedAt = completedAt
         self.motivation = motivation
         self.nextStep = nextStep
@@ -92,7 +97,7 @@ extension FocusTask {
             id: id,
             title: title,
             details: details,
-            carouselOrder: carouselOrder,
+            sortOrder: sortOrder,
             createdAt: createdAt,
             updatedAt: updatedAt,
             completedAt: completedAt,

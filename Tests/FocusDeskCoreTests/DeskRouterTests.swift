@@ -10,9 +10,9 @@ final class DeskRouterTests: XCTestCase {
         let thirdID = UUID()
 
         let tasks = [
-            TaskSnapshot(id: firstID, title: "First", carouselOrder: 0),
-            TaskSnapshot(id: secondID, title: "Done", carouselOrder: 1, completedAt: Date()),
-            TaskSnapshot(id: thirdID, title: "Third", carouselOrder: 2)
+            TaskSnapshot(id: firstID, title: "First", sortOrder: 0),
+            TaskSnapshot(id: secondID, title: "Done", sortOrder: 1, completedAt: Date()),
+            TaskSnapshot(id: thirdID, title: "Third", sortOrder: 2)
         ]
 
         XCTAssertEqual(router.nextTask(in: tasks, after: firstID)?.id, thirdID)
@@ -25,9 +25,9 @@ final class DeskRouterTests: XCTestCase {
         let thirdID = UUID()
 
         let tasks = [
-            TaskSnapshot(id: firstID, title: "First", carouselOrder: 0),
-            TaskSnapshot(id: secondID, title: "Done", carouselOrder: 1, completedAt: Date()),
-            TaskSnapshot(id: thirdID, title: "Third", carouselOrder: 2)
+            TaskSnapshot(id: firstID, title: "First", sortOrder: 0),
+            TaskSnapshot(id: secondID, title: "Done", sortOrder: 1, completedAt: Date()),
+            TaskSnapshot(id: thirdID, title: "Third", sortOrder: 2)
         ]
 
         XCTAssertEqual(router.previousTask(in: tasks, before: firstID)?.id, thirdID)
@@ -39,8 +39,8 @@ final class DeskRouterTests: XCTestCase {
         let completedID = UUID()
 
         let tasks = [
-            TaskSnapshot(id: firstID, title: "First", carouselOrder: 0),
-            TaskSnapshot(id: completedID, title: "Done", carouselOrder: 1, completedAt: Date())
+            TaskSnapshot(id: firstID, title: "First", sortOrder: 0),
+            TaskSnapshot(id: completedID, title: "Done", sortOrder: 1, completedAt: Date())
         ]
 
         XCTAssertEqual(router.currentTask(in: tasks, selectedID: nil)?.id, firstID)
@@ -52,8 +52,8 @@ final class DeskRouterTests: XCTestCase {
         let earlier = Date(timeIntervalSince1970: 10)
 
         let tasks = [
-            TaskSnapshot(title: "Later", carouselOrder: 0, createdAt: later),
-            TaskSnapshot(title: "Earlier", carouselOrder: 0, createdAt: earlier)
+            TaskSnapshot(title: "Later", sortOrder: 0, createdAt: later),
+            TaskSnapshot(title: "Earlier", sortOrder: 0, createdAt: earlier)
         ]
 
         XCTAssertEqual(router.activeTasks(from: tasks).map(\.title), ["Earlier", "Later"])
