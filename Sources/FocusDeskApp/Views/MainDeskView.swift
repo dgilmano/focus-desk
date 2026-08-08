@@ -67,9 +67,10 @@ struct MainDeskView: View {
     private let minExpandedSidebarWidth = 132.0
     private let maxSidebarWidth = 260.0
     private let sidebarCollapseThreshold = 72.0
+    private let collapsedSidebarWidth = 58.0
+    private let collapsedSidebarBackgroundTopPadding = 62.0
+    private let collapsedSidebarControlTopPadding = 74.0
     private let workspaceHorizontalPadding = 28.0
-    private let hiddenSidebarToggleLeadingPadding = 116.0
-    private let hiddenSidebarToolbarLeadingPadding = 156.0
 
     private var activeTasks: [FocusTask] {
         tasks
@@ -156,6 +157,9 @@ struct MainDeskView: View {
                 if isSidebarVisible && sidebarWidth > sidebarCollapseThreshold {
                     sidebar
                         .transition(.move(edge: .leading).combined(with: .opacity))
+                } else {
+                    collapsedSidebar
+                        .transition(.move(edge: .leading).combined(with: .opacity))
                 }
 
                 detail
@@ -173,15 +177,6 @@ struct MainDeskView: View {
                 )
                 .padding(18)
                 .transition(AnyTransition.move(edge: .top).combined(with: .opacity))
-            }
-
-            if !isSidebarVisible {
-                sidebarToggleButton(systemImage: "sidebar.right") {
-                    showSidebar()
-                }
-                .padding(.top, 10)
-                .padding(.leading, hiddenSidebarToggleLeadingPadding)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
         .animation(.spring(duration: 0.34, bounce: 0.16), value: currentTaskIDRaw)
@@ -337,13 +332,187 @@ struct MainDeskView: View {
             .padding(.top, 10)
             .padding(.trailing, 15)
 
-            sidebarResizeHandle
+            sidebarResizeHandle(topPadding: 4)
         }
         .frame(width: sidebarWidth)
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var sidebarResizeHandle: some View {
+    private var collapsedSidebar: some View {
+        ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(FocusDeskStyle.sidebarBackground)
+                .padding(.leading, 4)
+                .padding(.top, collapsedSidebarBackgroundTopPadding)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 0) {
+                sidebarToggleButton(systemImage: "sidebar.right") {
+                    showSidebar()
+                }
+                .frame(width: 34, height: 34)
+                .padding(.top, collapsedSidebarControlTopPadding)
+
+                Rectangle()
+                    .fill(FocusDeskStyle.hairline)
+                    .frame(width: 34, height: 1)
+                    .padding(.top, 12)
+                    .padding(.bottom, 14)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    collapsedSidebarNavigation
+                        .padding(.vertical, 2)
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: .infinity)
+
+                Spacer(minLength: 12)
+
+                collapsedSidebarIconButton(
+                    title: googleAccountDisplayName.isEmpty ? "Google Account" : googleAccountDisplayName,
+                    systemImage: googleOAuthClientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "person.crop.circle" : "person.crop.circle.fill",
+                    isSelected: false,
+                    iconColor: .secondary
+                ) {
+                    showingGoogleCloudSettings = true
+                }
+                .padding(.bottom, 18)
+            }
+            .padding(.horizontal, 8)
+
+            sidebarResizeHandle(topPadding: collapsedSidebarBackgroundTopPadding)
+        }
+        .frame(width: collapsedSidebarWidth)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var collapsedSidebarNavigation: some View {
+        VStack(spacing: 8) {
+            collapsedSidebarIconButton(
+                title: "Desk",
+                systemImage: "circle.dashed",
+                isSelected: selectedSection == .desk,
+                iconColor: .orange
+            ) {
+                selectedSection = .desk
+                ensureValidSelection()
+            }
+
+            collapsedSidebarIconButton(
+                title: "New Task",
+                systemImage: "plus.square.on.square",
+                isSelected: selectedSection == .newTask,
+                iconColor: .blue
+            ) {
+                selectedSection = .newTask
+            }
+            .keyboardShortcut("n", modifiers: [.command])
+
+            collapsedSidebarIconButton(
+                title: "Tasks",
+                systemImage: "tray.full",
+                isSelected: selectedSection == .tasks,
+                iconColor: .mint
+            ) {
+                selectedSection = .tasks
+            }
+
+            collapsedSidebarIconButton(
+                title: "Completed",
+                systemImage: "checkmark.circle",
+                isSelected: selectedSection == .completed,
+                iconColor: .green
+            ) {
+                selectedSection = .completed
+            }
+
+            collapsedSidebarIconButton(
+                title: "Summary",
+                systemImage: "chart.bar.xaxis",
+                isSelected: selectedSection == .summary,
+                iconColor: .purple
+            ) {
+                selectedSection = .summary
+            }
+
+            if isTagsSidebarSectionExpanded && !sidebarTagItems.isEmpty {
+                Rectangle()
+                    .fill(FocusDeskStyle.hairline)
+                    .frame(width: 24, height: 1)
+                    .padding(.vertical, 4)
+
+                ForEach(sidebarTagItems) { item in
+                    let palette = TaskTagPalette.palette(for: item.tag.colorName)
+
+                    collapsedSidebarSwatchButton(
+                        title: item.tag.name,
+                        isSelected: selectedSection == .tag(item.normalizedName),
+                        swatchColor: palette.background,
+                        borderColor: palette.foreground
+                    ) {
+                        selectedSection = .tag(item.normalizedName)
+                    }
+                }
+            }
+        }
+    }
+
+    private func collapsedSidebarIconButton(
+        title: String,
+        systemImage: String,
+        isSelected: Bool,
+        iconColor: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .regular))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(iconColor)
+                .frame(width: 32, height: 32)
+                .background {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(FocusDeskStyle.selectedBackground)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+
+    private func collapsedSidebarSwatchButton(
+        title: String,
+        isSelected: Bool,
+        swatchColor: Color,
+        borderColor: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(swatchColor)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .stroke(borderColor.opacity(0.34), lineWidth: 0.8)
+                }
+                .frame(width: 15, height: 15)
+                .frame(width: 32, height: 32)
+                .background {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(FocusDeskStyle.selectedBackground)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+
+    private func sidebarResizeHandle(topPadding: Double) -> some View {
         Rectangle()
             .fill(Color.primary.opacity(0.001))
             .frame(width: 18)
@@ -370,7 +539,7 @@ struct MainDeskView: View {
                         sidebarDragStartWidth = nil
                     }
             )
-            .padding(.top, 4)
+            .padding(.top, topPadding)
             .padding(.bottom, 8)
             .offset(x: 9)
     }
@@ -511,7 +680,7 @@ struct MainDeskView: View {
             .labelStyle(.iconOnly)
             .help(isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme")
         }
-        .padding(.leading, detailToolbarLeadingPadding)
+        .padding(.leading, workspaceHorizontalPadding)
         .padding(.trailing, workspaceHorizontalPadding)
         .padding(.top, 30)
         .padding(.bottom, 18)
@@ -536,10 +705,6 @@ struct MainDeskView: View {
         case let .tag(normalizedName):
             return tagTitle(for: normalizedName)
         }
-    }
-
-    private var detailToolbarLeadingPadding: Double {
-        isSidebarVisible ? workspaceHorizontalPadding : hiddenSidebarToolbarLeadingPadding
     }
 
     private var toolbarSubtitle: String {
