@@ -10,6 +10,7 @@ private enum MainSection: Equatable {
     case tasks
     case completed
     case summary
+    case allTags
     case tag(String)
 }
 
@@ -106,6 +107,10 @@ struct MainDeskView: View {
             .sorted {
                 ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
             }
+    }
+
+    private var activeTaggedTasks: [FocusTask] {
+        activeTasks.filter { !$0.enabledTagRecords.isEmpty }
     }
 
     private var journalEntriesTodayCount: Int {
@@ -297,17 +302,22 @@ struct MainDeskView: View {
                         ForEach(sidebarTagItems) { item in
                             let palette = TaskTagPalette.palette(for: item.tag.colorName)
 
-                            FocusDeskSidebarButton(
+                            FocusDeskSidebarTagButton(
                                 title: item.tag.name,
-                                systemImage: "tag.fill",
                                 isSelected: selectedSection == .tag(item.normalizedName),
                                 count: item.activeTaskCount,
-                                iconColor: palette.foreground,
-                                swatchColor: palette.background,
-                                swatchBorderColor: palette.foreground
+                                dotColor: palette.background,
+                                dotBorderColor: palette.foreground
                             ) {
                                 selectedSection = .tag(item.normalizedName)
                             }
+                        }
+
+                        FocusDeskSidebarAllTagsButton(
+                            isSelected: selectedSection == .allTags,
+                            count: activeTaggedTasks.count
+                        ) {
+                            selectedSection = .allTags
                         }
                     }
                 }
@@ -444,14 +454,20 @@ struct MainDeskView: View {
                 ForEach(sidebarTagItems) { item in
                     let palette = TaskTagPalette.palette(for: item.tag.colorName)
 
-                    collapsedSidebarSwatchButton(
+                    collapsedSidebarDotButton(
                         title: item.tag.name,
                         isSelected: selectedSection == .tag(item.normalizedName),
-                        swatchColor: palette.background,
+                        dotColor: palette.background,
                         borderColor: palette.foreground
                     ) {
                         selectedSection = .tag(item.normalizedName)
                     }
+                }
+
+                collapsedSidebarAllTagsButton(
+                    isSelected: selectedSection == .allTags
+                ) {
+                    selectedSection = .allTags
                 }
             }
         }
@@ -483,18 +499,18 @@ struct MainDeskView: View {
         .accessibilityLabel(title)
     }
 
-    private func collapsedSidebarSwatchButton(
+    private func collapsedSidebarDotButton(
         title: String,
         isSelected: Bool,
-        swatchColor: Color,
+        dotColor: Color,
         borderColor: Color,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(swatchColor)
+            Circle()
+                .fill(dotColor)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    Circle()
                         .stroke(borderColor.opacity(0.34), lineWidth: 0.8)
                 }
                 .frame(width: 15, height: 15)
@@ -510,6 +526,36 @@ struct MainDeskView: View {
         .buttonStyle(.plain)
         .help(title)
         .accessibilityLabel(title)
+    }
+
+    private func collapsedSidebarAllTagsButton(
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .stroke(Color.primary.opacity(0.9), lineWidth: 1.4)
+                    .frame(width: 13, height: 13)
+                    .offset(x: -3)
+
+                Circle()
+                    .stroke(Color.primary.opacity(0.9), lineWidth: 1.4)
+                    .frame(width: 13, height: 13)
+                    .offset(x: 3)
+            }
+            .frame(width: 32, height: 32)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(FocusDeskStyle.selectedBackground)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help("All Tags...")
+        .accessibilityLabel("All Tags")
     }
 
     private func sidebarResizeHandle(topPadding: Double) -> some View {
@@ -620,6 +666,9 @@ struct MainDeskView: View {
                 case .summary:
                     summaryWorkspace
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
+                case .allTags:
+                    manageWorkspace(.allTags)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 case let .tag(normalizedName):
                     manageWorkspace(.tag(normalizedName))
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
@@ -702,6 +751,8 @@ struct MainDeskView: View {
             return "Completed"
         case .summary:
             return "Summary"
+        case .allTags:
+            return "All Tags"
         case let .tag(normalizedName):
             return tagTitle(for: normalizedName)
         }
@@ -717,6 +768,9 @@ struct MainDeskView: View {
             return completedTasks.count == 1 ? "1 completed task" : "\(completedTasks.count) completed tasks"
         case .summary:
             return journalEntriesTodayCount == 1 ? "1 journal entry today" : "\(journalEntriesTodayCount) journal entries today"
+        case .allTags:
+            let count = activeTaggedTasks.count
+            return count == 1 ? "1 tagged task" : "\(count) tagged tasks"
         case let .tag(normalizedName):
             let count = activeTasksMatchingTag(normalizedName).count
             return count == 1 ? "1 active task" : "\(count) active tasks"
@@ -1135,6 +1189,7 @@ struct MainDeskView: View {
 private enum ManageWorkspaceMode: Equatable {
     case tasks
     case completed
+    case allTags
     case tag(String)
 
     var emptyTitle: String {
@@ -1143,6 +1198,8 @@ private enum ManageWorkspaceMode: Equatable {
             return "No active tasks"
         case .completed:
             return "No completed tasks"
+        case .allTags:
+            return "No tagged tasks"
         case .tag:
             return "No tagged tasks"
         }
@@ -1154,6 +1211,8 @@ private enum ManageWorkspaceMode: Equatable {
             return "Create a task to start your desk."
         case .completed:
             return "Finished tasks will appear here."
+        case .allTags:
+            return "Add tags to active tasks to see them here."
         case .tag:
             return "Add this tag to active tasks to see them here."
         }
@@ -1165,6 +1224,8 @@ private enum ManageWorkspaceMode: Equatable {
             return "tray.full"
         case .completed:
             return "checkmark.circle"
+        case .allTags:
+            return "tag"
         case .tag:
             return "number"
         }
@@ -1187,6 +1248,8 @@ private struct ManageWorkspaceView: View {
             return activeTasks
         case .completed:
             return completedTasks
+        case .allTags:
+            return activeTasks.filter { !$0.enabledTagRecords.isEmpty }
         case let .tag(normalizedName):
             return activeTasks.filter { task in
                 task.enabledTagRecords.contains { tag in
@@ -1286,7 +1349,7 @@ private struct ManageTaskRow: View {
 
             HStack(spacing: 6) {
                 switch mode {
-                case .tasks, .tag:
+                case .tasks, .allTags, .tag:
                     rowAction(systemImage: "arrow.forward", help: "Open Task") {
                         onOpen(task)
                     }

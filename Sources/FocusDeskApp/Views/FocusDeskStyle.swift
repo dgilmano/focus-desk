@@ -196,6 +196,106 @@ struct FocusDeskSidebarButton: View {
     }
 }
 
+struct FocusDeskSidebarTagButton: View {
+    var title: String
+    var isSelected: Bool = false
+    var count: Int?
+    var dotColor: Color
+    var dotBorderColor: Color?
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(dotColor)
+                    .overlay {
+                        Circle()
+                            .stroke((dotBorderColor ?? dotColor).opacity(0.28), lineWidth: 0.7)
+                    }
+                    .frame(width: 12, height: 12)
+                    .frame(width: 16, height: 16)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 6)
+
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(FocusDeskStyle.selectedBackground)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct FocusDeskSidebarAllTagsButton: View {
+    var title: String = "All Tags..."
+    var isSelected: Bool = false
+    var count: Int?
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.primary.opacity(0.9), lineWidth: 1.4)
+                        .frame(width: 12, height: 12)
+                        .offset(x: -3)
+
+                    Circle()
+                        .stroke(Color.primary.opacity(0.9), lineWidth: 1.4)
+                        .frame(width: 12, height: 12)
+                        .offset(x: 3)
+                }
+                .frame(width: 16, height: 16)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 6)
+
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(FocusDeskStyle.selectedBackground)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct SidebarEmptyLabel: View {
     var title: String
 
