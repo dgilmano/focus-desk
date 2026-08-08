@@ -66,11 +66,11 @@ struct OrbSidebarSection<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(OrbStyle.sectionHeadingForeground)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
 
             VStack(spacing: 1) {
                 content()
@@ -84,36 +84,61 @@ struct OrbSidebarButton: View {
     var systemImage: String
     var isSelected: Bool = false
     var count: Int?
+    var iconColor: Color = .secondary
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                OrbIcon(systemName: systemImage)
+            HStack(spacing: 7) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .regular))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(iconColor)
+                    .frame(width: 16, height: 16)
 
                 Text(title)
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: 6)
 
                 if let count {
                     Text("\(count)")
-                        .font(.system(size: 10, weight: .regular, design: .rounded))
+                        .font(.system(size: 10, weight: .regular))
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
             }
-            .padding(.horizontal, 10)
-            .frame(height: 28)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
             .background {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(OrbStyle.selectedBackground)
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct SidebarEmptyLabel: View {
+    var title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .regular))
+            .foregroundStyle(.tertiary)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 24, alignment: .leading)
     }
 }
 

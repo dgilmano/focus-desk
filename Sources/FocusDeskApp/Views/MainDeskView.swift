@@ -4,12 +4,23 @@ import FocusDeskCore
 import SwiftData
 import SwiftUI
 
-private enum MainSection {
+private enum MainSection: Equatable {
     case desk
     case newTask
     case tasks
     case completed
     case summary
+    case tag(String)
+}
+
+private struct SidebarTagItem: Identifiable {
+    var tag: TaskTagRecord
+    var normalizedName: String
+    var activeTaskCount: Int
+
+    var id: String {
+        normalizedName
+    }
 }
 
 struct MainDeskView: View {
@@ -103,8 +114,8 @@ struct MainDeskView: View {
         var seenNames = Set<String>()
         var uniqueTags: [TaskTagRecord] = []
 
-        for tag in tasks.flatMap(\.tagRecords) {
-            let normalizedName = tag.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        for tag in tasks.flatMap(\.enabledTagRecords) {
+            let normalizedName = normalizedTagName(tag.name)
 
             guard !normalizedName.isEmpty, !seenNames.contains(normalizedName) else {
                 continue
@@ -116,6 +127,21 @@ struct MainDeskView: View {
 
         return uniqueTags.sorted { lhs, rhs in
             lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    private var sidebarTagItems: [SidebarTagItem] {
+        availableTagRecords.map { tag in
+            let normalizedName = normalizedTagName(tag.name)
+            return SidebarTagItem(
+                tag: tag,
+                normalizedName: normalizedName,
+                activeTaskCount: activeTasks.filter { task in
+                    task.enabledTagRecords.contains { taskTag in
+                        normalizedTagName(taskTag.name) == normalizedName
+                    }
+                }.count
+            )
         }
     }
 
@@ -200,13 +226,13 @@ struct MainDeskView: View {
                 .padding(.top, 4)
                 .padding(.bottom, 8)
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("Focus Desk")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, 14)
                     .padding(.top, 48)
 
                 OrbSidebarSection(title: "Focus") {
@@ -214,7 +240,8 @@ struct MainDeskView: View {
                         title: "Desk",
                         systemImage: "circle.dashed",
                         isSelected: selectedSection == .desk,
-                        count: activeTasks.count
+                        count: activeTasks.count,
+                        iconColor: .orange
                     ) {
                         selectedSection = .desk
                         ensureValidSelection()
@@ -223,7 +250,8 @@ struct MainDeskView: View {
                     OrbSidebarButton(
                         title: "New Task",
                         systemImage: "plus.square.on.square",
-                        isSelected: selectedSection == .newTask
+                        isSelected: selectedSection == .newTask,
+                        iconColor: .blue
                     ) {
                         selectedSection = .newTask
                     }
@@ -235,7 +263,8 @@ struct MainDeskView: View {
                         title: "Tasks",
                         systemImage: "tray.full",
                         isSelected: selectedSection == .tasks,
-                        count: activeTasks.count
+                        count: activeTasks.count,
+                        iconColor: .mint
                     ) {
                         selectedSection = .tasks
                     }
@@ -244,7 +273,8 @@ struct MainDeskView: View {
                         title: "Completed",
                         systemImage: "checkmark.circle",
                         isSelected: selectedSection == .completed,
-                        count: completedTasks.count
+                        count: completedTasks.count,
+                        iconColor: .green
                     ) {
                         selectedSection = .completed
                     }
@@ -253,9 +283,28 @@ struct MainDeskView: View {
                         title: "Summary",
                         systemImage: "chart.bar.xaxis",
                         isSelected: selectedSection == .summary,
-                        count: journalEntriesTodayCount
+                        count: journalEntriesTodayCount,
+                        iconColor: .purple
                     ) {
                         selectedSection = .summary
+                    }
+                }
+
+                OrbSidebarSection(title: "Tags") {
+                    if sidebarTagItems.isEmpty {
+                        SidebarEmptyLabel("No tags yet")
+                    } else {
+                        ForEach(sidebarTagItems) { item in
+                            OrbSidebarButton(
+                                title: item.tag.name,
+                                systemImage: "number",
+                                isSelected: selectedSection == .tag(item.normalizedName),
+                                count: item.activeTaskCount,
+                                iconColor: TaskTagPalette.palette(for: item.tag.colorName).foreground
+                            ) {
+                                selectedSection = .tag(item.normalizedName)
+                            }
+                        }
                     }
                 }
 
@@ -393,6 +442,9 @@ struct MainDeskView: View {
                 case .summary:
                     summaryWorkspace
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
+                case let .tag(normalizedName):
+                    manageWorkspace(.tag(normalizedName))
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -471,6 +523,8 @@ struct MainDeskView: View {
             return "Completed"
         case .summary:
             return "Summary"
+        case let .tag(normalizedName):
+            return tagTitle(for: normalizedName)
         }
     }
 
@@ -484,6 +538,9 @@ struct MainDeskView: View {
             return completedTasks.count == 1 ? "1 completed task" : "\(completedTasks.count) completed tasks"
         case .summary:
             return journalEntriesTodayCount == 1 ? "1 journal entry today" : "\(journalEntriesTodayCount) journal entries today"
+        case let .tag(normalizedName):
+            let count = activeTasksMatchingTag(normalizedName).count
+            return count == 1 ? "1 active task" : "\(count) active tasks"
         case .desk:
             break
         }
@@ -850,6 +907,24 @@ struct MainDeskView: View {
         noteFocused = true
     }
 
+    private func activeTasksMatchingTag(_ normalizedName: String) -> [FocusTask] {
+        activeTasks.filter { task in
+            task.enabledTagRecords.contains { tag in
+                normalizedTagName(tag.name) == normalizedName
+            }
+        }
+    }
+
+    private func tagTitle(for normalizedName: String) -> String {
+        availableTagRecords.first { tag in
+            normalizedTagName(tag.name) == normalizedName
+        }?.name ?? "Tag"
+    }
+
+    private func normalizedTagName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     private func toggleWindowZoom() {
         NSApplication.shared.keyWindow?.zoom(nil)
     }
@@ -878,9 +953,10 @@ struct MainDeskView: View {
     }
 }
 
-private enum ManageWorkspaceMode {
+private enum ManageWorkspaceMode: Equatable {
     case tasks
     case completed
+    case tag(String)
 
     var emptyTitle: String {
         switch self {
@@ -888,6 +964,8 @@ private enum ManageWorkspaceMode {
             return "No active tasks"
         case .completed:
             return "No completed tasks"
+        case .tag:
+            return "No tagged tasks"
         }
     }
 
@@ -897,6 +975,8 @@ private enum ManageWorkspaceMode {
             return "Create a task to start your desk."
         case .completed:
             return "Finished tasks will appear here."
+        case .tag:
+            return "Add this tag to active tasks to see them here."
         }
     }
 
@@ -906,6 +986,8 @@ private enum ManageWorkspaceMode {
             return "tray.full"
         case .completed:
             return "checkmark.circle"
+        case .tag:
+            return "number"
         }
     }
 }
@@ -926,6 +1008,12 @@ private struct ManageWorkspaceView: View {
             return activeTasks
         case .completed:
             return completedTasks
+        case let .tag(normalizedName):
+            return activeTasks.filter { task in
+                task.enabledTagRecords.contains { tag in
+                    tag.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedName
+                }
+            }
         }
     }
 
@@ -964,7 +1052,7 @@ private struct ManageWorkspaceView: View {
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(.tertiary)
 
-                if mode == .tasks {
+                if mode != .completed {
                     Button {
                         onCreate()
                     } label: {
@@ -990,7 +1078,7 @@ private struct ManageTaskRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             OrbIcon(
-                systemName: mode == .tasks ? "rectangle.stack" : "checkmark.circle",
+                systemName: mode == .completed ? "checkmark.circle" : "rectangle.stack",
                 filled: true
             )
 
@@ -1019,7 +1107,7 @@ private struct ManageTaskRow: View {
 
             HStack(spacing: 6) {
                 switch mode {
-                case .tasks:
+                case .tasks, .tag:
                     rowAction(systemImage: "arrow.forward", help: "Open Task") {
                         onOpen(task)
                     }
