@@ -324,13 +324,17 @@ private struct TaskTagChip: View {
     var onEdit: () -> Void
     var onDelete: () -> Void
 
-    @State private var isHovered = false
+    @State private var isChipHovered = false
     @State private var isActionHovered = false
-    @State private var hideActionsTask: Task<Void, Never>?
+    @State private var hideChipTask: Task<Void, Never>?
+    @State private var hideActionTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .top) {
             StaticTaskTagChip(tag: tag)
+                .onHover { hovered in
+                    updateHoverState(.chip, hovered)
+                }
 
             VStack {
                 Spacer(minLength: 0)
@@ -344,12 +348,9 @@ private struct TaskTagChip: View {
             }
         }
         .frame(height: 42, alignment: .top)
-        .contentShape(Rectangle())
-        .onHover { hovered in
-            updateHoverState(.chip, hovered)
-        }
         .onDisappear {
-            hideActionsTask?.cancel()
+            hideChipTask?.cancel()
+            hideActionTask?.cancel()
         }
     }
 
@@ -402,18 +403,23 @@ private struct TaskTagChip: View {
     }
 
     private var actionsVisible: Bool {
-        isHovered || isActionHovered
+        isChipHovered || isActionHovered
     }
 
     private func updateHoverState(_ region: TagHoverRegion, _ hovered: Bool) {
-        hideActionsTask?.cancel()
-
         if hovered {
+            cancelHideTask(for: region)
             setHoverState(region, true)
             return
         }
 
-        hideActionsTask = Task {
+        scheduleHideTask(for: region)
+    }
+
+    private func scheduleHideTask(for region: TagHoverRegion) {
+        cancelHideTask(for: region)
+
+        let task = Task {
             do {
                 try await Task.sleep(for: .milliseconds(180))
             } catch {
@@ -428,13 +434,31 @@ private struct TaskTagChip: View {
                 setHoverState(region, false)
             }
         }
+
+        switch region {
+        case .chip:
+            hideChipTask = task
+        case .actions:
+            hideActionTask = task
+        }
+    }
+
+    private func cancelHideTask(for region: TagHoverRegion) {
+        switch region {
+        case .chip:
+            hideChipTask?.cancel()
+            hideChipTask = nil
+        case .actions:
+            hideActionTask?.cancel()
+            hideActionTask = nil
+        }
     }
 
     private func setHoverState(_ region: TagHoverRegion, _ hovered: Bool) {
         withAnimation(.smooth(duration: 0.12)) {
             switch region {
             case .chip:
-                isHovered = hovered
+                isChipHovered = hovered
             case .actions:
                 isActionHovered = hovered
             }
