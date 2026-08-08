@@ -329,23 +329,28 @@ private struct TaskTagChip: View {
     @State private var hideActionsTask: Task<Void, Never>?
 
     var body: some View {
-        StaticTaskTagChip(tag: tag)
-            .overlay(alignment: .bottom) {
+        ZStack(alignment: .top) {
+            StaticTaskTagChip(tag: tag)
+
+            VStack {
+                Spacer(minLength: 0)
+
                 tagActionButtons
                     .opacity(actionsVisible ? 1 : 0)
                     .allowsHitTesting(actionsVisible)
-                    .offset(y: 18)
                     .onHover { hovered in
                         updateHoverState(.actions, hovered)
                     }
             }
-            .contentShape(Rectangle())
-            .onHover { hovered in
-                updateHoverState(.chip, hovered)
-            }
-            .onDisappear {
-                hideActionsTask?.cancel()
-            }
+        }
+        .frame(height: 42, alignment: .top)
+        .contentShape(Rectangle())
+        .onHover { hovered in
+            updateHoverState(.chip, hovered)
+        }
+        .onDisappear {
+            hideActionsTask?.cancel()
+        }
     }
 
     private var tagActionButtons: some View {
