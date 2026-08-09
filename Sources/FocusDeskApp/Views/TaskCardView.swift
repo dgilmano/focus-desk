@@ -13,7 +13,7 @@ struct TaskCardView: View {
     var onDeleteJournalEntry: (ProgressEntry) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: 28) {
             if showsHeader {
                 HStack(alignment: .top, spacing: 14) {
                     FocusDeskIcon(systemName: "target", filled: true)
@@ -42,7 +42,6 @@ struct TaskCardView: View {
                 Text("What Was Done")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .tracking(0.6)
                     .textCase(.uppercase)
 
                 WorkDoneInputBlock(
@@ -52,9 +51,13 @@ struct TaskCardView: View {
                     onDraftChanged: onDraftChanged,
                     onSaveJournalEntry: onSaveJournalEntry
                 )
-
-                TaskProgressView(stepCount: task.newestEntries.count)
             }
+
+            Rectangle()
+                .fill(FocusDeskStyle.focusDivider.opacity(0.34))
+                .frame(height: 1)
+                .padding(.top, 2)
+                .padding(.bottom, 2)
 
             journalTimeline
         }
@@ -66,7 +69,6 @@ struct TaskCardView: View {
             Text("Journal")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
-                .tracking(0.6)
                 .textCase(.uppercase)
 
             if task.newestEntries.isEmpty {
@@ -146,16 +148,16 @@ private struct WorkDoneInputBlock: View {
         }
         .padding(.leading, 15)
         .padding(.trailing, 10)
-        .frame(maxWidth: .infinity, minHeight: 46, maxHeight: 46, alignment: .center)
+        .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(FocusDeskStyle.focusSurface)
+                .fill(Color(nsColor: .textBackgroundColor).opacity(0.28))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(
-                    hasDraft ? FocusDeskStyle.focusAccent.opacity(0.26) : FocusDeskStyle.focusDivider.opacity(0.28),
-                    lineWidth: 0.7
+                    hasDraft ? FocusDeskStyle.focusAccent.opacity(0.34) : FocusDeskStyle.focusDivider.opacity(0.58),
+                    lineWidth: 1
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -163,66 +165,6 @@ private struct WorkDoneInputBlock: View {
 
     private var hasDraft: Bool {
         !task.localDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-}
-
-private struct TaskProgressView: View {
-    var stepCount: Int
-
-    private var completedFraction: Double {
-        guard stepCount > 0 else {
-            return 0
-        }
-
-        return min(0.18 + (Double(stepCount) * 0.08), 1)
-    }
-
-    private var progressText: String {
-        if stepCount == 1 {
-            return "1 useful step"
-        }
-
-        return "\(stepCount) useful steps"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Task Progress")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(.tertiary)
-
-                Spacer()
-
-                Text(progressText)
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(.tertiary)
-            }
-
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule(style: .continuous)
-                        .fill(Color.secondary.opacity(0.12))
-
-                    Capsule(style: .continuous)
-                        .fill(FocusDeskStyle.focusAccent.opacity(0.42))
-                        .frame(width: proxy.size.width * completedFraction)
-                }
-            }
-            .frame(height: 5)
-
-            HStack {
-                Text("Useful steps logged in Journal")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(.tertiary)
-
-                Spacer()
-
-                Text("\(stepCount) /")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(.tertiary)
-            }
-        }
     }
 }
 
@@ -245,13 +187,13 @@ private struct ProgressEntryRow: View {
         HStack(alignment: .top, spacing: 13) {
             VStack(spacing: 0) {
                 Circle()
-                    .fill(FocusDeskStyle.focusAccent.opacity(0.62))
+                    .fill(Color.secondary.opacity(0.58))
                     .frame(width: 6, height: 6)
                     .padding(.top, 6)
 
                 if !isLast {
                     Rectangle()
-                        .fill(FocusDeskStyle.focusDivider.opacity(0.52))
+                        .fill(Color.secondary.opacity(0.30))
                         .frame(width: 1)
                         .frame(maxHeight: .infinity)
                         .padding(.top, 5)
@@ -262,8 +204,8 @@ private struct ProgressEntryRow: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(DateFormatting.journalString(from: entry.timestamp))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
                     .padding(.trailing, 66)
 
                 if isEditing {
@@ -274,7 +216,7 @@ private struct ProgressEntryRow: View {
                         font: .system(size: 13, weight: .regular),
                         lineLimit: isExpanded ? nil : collapsedNoteLineLimit
                     )
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.82))
                     .textSelection(.enabled)
                 }
 

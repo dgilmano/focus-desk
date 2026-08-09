@@ -679,35 +679,64 @@ struct MainDeskView: View {
     }
 
     private var detailToolbar: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(toolbarTitle)
-                    .font(.system(size: 26, weight: .semibold))
+        Group {
+            if selectedSection == .desk {
+                ZStack {
+                    TaskRotationControl(
+                        currentIndex: currentTaskIndex,
+                        totalCount: activeTasks.count,
+                        onPrevious: selectPreviousTask,
+                        onNext: selectNextTask
+                    )
 
-                Text(toolbarSubtitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
+                    HStack(spacing: 12) {
+                        Spacer()
 
-            Spacer()
+                        toolbarIconButton(
+                            systemName: "plus",
+                            help: "New Task"
+                        ) {
+                            selectedSection = .newTask
+                        }
 
-            if selectedSection != .newTask {
-                Button {
-                    selectedSection = .newTask
-                } label: {
-                    Label("New Task", systemImage: "plus")
+                        toolbarIconButton(
+                            systemName: isDarkTheme ? "sun.max" : "moon",
+                            help: isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme"
+                        ) {
+                            isDarkTheme.toggle()
+                        }
+                    }
                 }
-                .labelStyle(.iconOnly)
-                .help("New Task")
-            }
+            } else {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(toolbarTitle)
+                            .font(.system(size: 26, weight: .semibold))
 
-            Button {
-                isDarkTheme.toggle()
-            } label: {
-                Label(isDarkTheme ? "Light Theme" : "Dark Theme", systemImage: isDarkTheme ? "sun.max" : "moon")
+                        Text(toolbarSubtitle)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if selectedSection != .newTask {
+                        toolbarIconButton(
+                            systemName: "plus",
+                            help: "New Task"
+                        ) {
+                            selectedSection = .newTask
+                        }
+                    }
+
+                    toolbarIconButton(
+                        systemName: isDarkTheme ? "sun.max" : "moon",
+                        help: isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme"
+                    ) {
+                        isDarkTheme.toggle()
+                    }
+                }
             }
-            .labelStyle(.iconOnly)
-            .help(isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme")
         }
         .padding(.leading, workspaceHorizontalPadding)
         .padding(.trailing, workspaceHorizontalPadding)
@@ -717,6 +746,26 @@ struct MainDeskView: View {
         .onTapGesture(count: 2) {
             toggleWindowZoom()
         }
+    }
+
+    private func toolbarIconButton(
+        systemName: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(.primary)
+                .frame(width: 42, height: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(FocusDeskStyle.focusSurface)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private var toolbarTitle: String {
@@ -767,6 +816,14 @@ struct MainDeskView: View {
         }
 
         return "\(activeTasks.count) active tasks"
+    }
+
+    private var currentTaskIndex: Int {
+        guard let currentTask else {
+            return 0
+        }
+
+        return activeTasks.firstIndex { $0.id == currentTask.id } ?? 0
     }
 
     private var summaryWorkspace: some View {
@@ -855,19 +912,10 @@ struct MainDeskView: View {
     private func taskWorkspace(_ task: FocusTask) -> some View {
         GeometryReader { proxy in
             let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
-            let compositionWidth = min(contentWidth, 1080)
-            let currentTaskIndex = activeTasks.firstIndex { $0.id == task.id } ?? 0
+            let compositionWidth = min(contentWidth, 1210)
 
             ScrollView {
-                VStack(spacing: 34) {
-                    TaskRotationControl(
-                        currentIndex: currentTaskIndex,
-                        totalCount: activeTasks.count,
-                        onPrevious: selectPreviousTask,
-                        onNext: selectNextTask
-                    )
-                    .padding(.top, 2)
-
+                VStack(spacing: 46) {
                     TaskFocusSummaryView(
                         task: task,
                         availableTags: availableTagRecords,
@@ -916,7 +964,7 @@ struct MainDeskView: View {
                 }
                 .frame(maxWidth: compositionWidth, alignment: .topLeading)
                 .padding(.horizontal, workspaceHorizontalPadding)
-                .padding(.top, 34)
+                .padding(.top, 98)
                 .padding(.bottom, 28)
                 .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .top)
             }
@@ -1182,33 +1230,30 @@ private struct TaskRotationControl: View {
     private let maxVisibleDots = 11
 
     var body: some View {
-        HStack(spacing: 18) {
-            rotationButton(systemName: "chevron.left", help: "Previous Task", action: onPrevious)
-                .keyboardShortcut(.leftArrow, modifiers: [])
+        VStack(spacing: 8) {
+            HStack(spacing: 24) {
+                rotationButton(systemName: "chevron.left", help: "Previous Task", action: onPrevious)
+                    .keyboardShortcut(.leftArrow, modifiers: [])
 
-            VStack(spacing: 8) {
                 Text(rotationTitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
                     .monospacedDigit()
+                    .frame(minWidth: 90)
 
-                HStack(spacing: 6) {
-                    ForEach(visibleDotIndices, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentIndex ? FocusDeskStyle.focusAccent : Color.secondary.opacity(0.24))
-                            .frame(
-                                width: index == currentIndex ? 6 : 4,
-                                height: index == currentIndex ? 6 : 4
-                            )
-                            .animation(.smooth(duration: 0.16), value: currentIndex)
-                    }
-                }
-                .frame(height: 8)
+                rotationButton(systemName: "chevron.right", help: "Next Task", action: onNext)
+                    .keyboardShortcut(.rightArrow, modifiers: [])
             }
-            .frame(minWidth: 118)
 
-            rotationButton(systemName: "chevron.right", help: "Next Task", action: onNext)
-                .keyboardShortcut(.rightArrow, modifiers: [])
+            HStack(spacing: 10) {
+                ForEach(visibleDotIndices, id: \.self) { index in
+                    Circle()
+                        .fill(index == currentIndex ? FocusDeskStyle.focusAccent : Color.secondary.opacity(0.25))
+                        .frame(width: 8, height: 8)
+                        .animation(.smooth(duration: 0.16), value: currentIndex)
+                }
+            }
+            .frame(height: 8)
         }
         .frame(maxWidth: .infinity)
         .opacity(totalCount > 0 ? 1 : 0)
@@ -1223,10 +1268,14 @@ private struct TaskRotationControl: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(.primary)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(FocusDeskStyle.focusSurface)
+                )
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .disabled(totalCount <= 1)

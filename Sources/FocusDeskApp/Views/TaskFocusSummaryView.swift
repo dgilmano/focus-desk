@@ -23,8 +23,8 @@ struct TaskFocusSummaryView: View {
     @FocusState private var motivationEditorFocused: Bool
     @FocusState private var nextStepEditorFocused: Bool
 
-    private let compactBreakpoint = 760.0
-    private let summarySpacing = 52.0
+    private let compactBreakpoint = 820.0
+    private let summarySpacing = 68.0
     private let compactSummarySpacing = 28.0
 
     var body: some View {
@@ -53,8 +53,6 @@ struct TaskFocusSummaryView: View {
             HStack(alignment: .center, spacing: 8) {
                 sectionLabel("Current Task")
 
-                Spacer(minLength: 12)
-
                 HStack(spacing: 2) {
                     subtleActionButton(
                         systemName: isEditingCurrentTask ? "checkmark" : "pencil",
@@ -70,6 +68,8 @@ struct TaskFocusSummaryView: View {
                         action: onComplete
                     )
                 }
+
+                Spacer(minLength: 12)
             }
             .padding(.bottom, 16)
 
@@ -80,15 +80,7 @@ struct TaskFocusSummaryView: View {
             }
 
             motivationSection
-                .padding(.top, 32)
-
-            TaskTagsView(
-                task: task,
-                availableTags: availableTags,
-                onTagsChanged: onTaskChanged
-            )
-            .padding(.top, 28)
-            .padding(.leading, -22)
+                .padding(.top, 46)
         }
         .contentShape(Rectangle())
         .onHover { isHovered in
@@ -128,7 +120,7 @@ struct TaskFocusSummaryView: View {
             HStack(spacing: 7) {
                 Image(systemName: "sparkle")
                     .font(.system(size: 9, weight: .regular))
-                    .foregroundStyle(FocusDeskStyle.focusAccent.opacity(0.82))
+                    .foregroundStyle(Color.orange.opacity(0.86))
 
                 sectionLabel("Why it matters")
 
@@ -156,6 +148,13 @@ struct TaskFocusSummaryView: View {
                 .allowsTightening(true)
                 .truncationMode(.tail)
                 .textSelection(.enabled)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(FocusDeskStyle.focusSurface.opacity(0.86))
+                )
             }
         }
         .contentShape(Rectangle())
@@ -174,7 +173,7 @@ struct TaskFocusSummaryView: View {
                 Spacer(minLength: 12)
 
                 subtleActionButton(
-                    systemName: isEditingNextStep ? "checkmark" : "pencil",
+                    systemName: isEditingNextStep ? "checkmark" : "arrow.up.right",
                     help: isEditingNextStep ? "Done editing" : "Edit Next Step",
                     isVisible: isNextStepActionVisible,
                     isHovered: $isNextStepActionHovered,
@@ -197,8 +196,8 @@ struct TaskFocusSummaryView: View {
                 .minimumScaleFactor(0.75)
                 .allowsTightening(true)
         }
-        .padding(22)
-        .frame(maxWidth: .infinity, minHeight: usesCompactLayout ? 170 : 254, alignment: .topLeading)
+        .padding(26)
+        .frame(maxWidth: .infinity, minHeight: usesCompactLayout ? 218 : 318, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(FocusDeskStyle.focusSurface)
@@ -220,19 +219,11 @@ struct TaskFocusSummaryView: View {
         VStack(alignment: .leading, spacing: 14) {
             if currentNextStep.isEmpty {
                 Text("Add a next step.")
-                    .font(.system(size: 16, weight: .regular))
+                    .font(.system(size: 17, weight: .regular))
                     .foregroundStyle(.tertiary)
                     .lineLimit(2)
             } else {
-                MarkdownText(
-                    activeNextStepText,
-                    font: .system(size: 17, weight: .medium),
-                    lineLimit: usesCompactLayout ? 3 : 4
-                )
-                .foregroundStyle(.primary)
-                .minimumScaleFactor(0.78)
-                .allowsTightening(true)
-                .truncationMode(.tail)
+                activeNextStepRow
 
                 if !remainingNextStepsText.isEmpty {
                     Rectangle()
@@ -242,7 +233,7 @@ struct TaskFocusSummaryView: View {
 
                     MarkdownText(
                         remainingNextStepsText,
-                        font: .system(size: 13, weight: .regular),
+                        font: .system(size: 15, weight: .regular),
                         lineLimit: usesCompactLayout ? 5 : 8
                     )
                     .foregroundStyle(.secondary)
@@ -253,6 +244,45 @@ struct TaskFocusSummaryView: View {
             }
         }
         .textSelection(.enabled)
+    }
+
+    private var activeNextStepRow: some View {
+        HStack(alignment: .center, spacing: 14) {
+            MarkdownText(
+                activeNextStepText,
+                font: .system(size: 16, weight: .semibold),
+                lineLimit: usesCompactLayout ? 3 : 2
+            )
+            .foregroundStyle(.primary)
+            .minimumScaleFactor(0.78)
+            .allowsTightening(true)
+            .truncationMode(.tail)
+
+            Spacer(minLength: 10)
+
+            Button {
+                beginNextStepEditing()
+            } label: {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(FocusDeskStyle.focusAccent)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .help("Edit Next Step")
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(FocusDeskStyle.focusAccent.opacity(0.12))
+        )
     }
 
     private var summaryWidthReader: some View {
@@ -358,7 +388,6 @@ struct TaskFocusSummaryView: View {
         Text(title.uppercased())
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(.secondary)
-            .tracking(0.6)
     }
 
     private func subtleActionButton(
@@ -412,18 +441,18 @@ struct TaskFocusSummaryView: View {
 
     private var nextStepColumnWidth: Double {
         guard summaryWidth > 0 else {
-            return 360
+            return 560
         }
 
-        return min(max(summaryWidth * 0.38, 310), 430)
+        return min(max(summaryWidth * 0.48, 500), 620)
     }
 
     private var currentTitleFontSize: Double {
-        usesCompactLayout ? 32.0 : 40.0
+        usesCompactLayout ? 34.0 : 44.0
     }
 
     private var isCurrentTaskActionVisible: Bool {
-        isEditingCurrentTask || isCurrentTaskHovered || isCurrentTaskActionHovered
+        true
     }
 
     private var isMotivationActionVisible: Bool {
@@ -431,7 +460,7 @@ struct TaskFocusSummaryView: View {
     }
 
     private var isNextStepActionVisible: Bool {
-        isEditingNextStep || isNextStepHovered || isNextStepActionHovered
+        true
     }
 
     private func updateSummaryWidth(_ width: Double) {
