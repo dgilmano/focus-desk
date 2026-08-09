@@ -1230,31 +1230,32 @@ private struct TaskRotationControl: View {
     private let maxVisibleDots = 11
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 24) {
+        VStack(spacing: 7) {
+            HStack(spacing: 18) {
                 rotationButton(systemName: "chevron.left", help: "Previous Task", action: onPrevious)
                     .keyboardShortcut(.leftArrow, modifiers: [])
 
                 Text(rotationTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
                     .monospacedDigit()
-                    .frame(minWidth: 90)
+                    .frame(width: 76)
 
                 rotationButton(systemName: "chevron.right", help: "Next Task", action: onNext)
                     .keyboardShortcut(.rightArrow, modifiers: [])
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(visibleDotIndices, id: \.self) { index in
                     Circle()
                         .fill(index == currentIndex ? FocusDeskStyle.focusAccent : Color.secondary.opacity(0.25))
-                        .frame(width: 8, height: 8)
+                        .frame(width: 6, height: 6)
                         .animation(.smooth(duration: 0.16), value: currentIndex)
                 }
             }
-            .frame(height: 8)
+            .frame(height: 6)
         }
+        .frame(width: 260)
         .frame(maxWidth: .infinity)
         .opacity(totalCount > 0 ? 1 : 0)
         .accessibilityElement(children: .combine)
@@ -1268,9 +1269,9 @@ private struct TaskRotationControl: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 16, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
                 .background(
                     Circle()
                         .fill(FocusDeskStyle.focusSurface)

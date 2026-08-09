@@ -270,10 +270,10 @@ struct TaskFocusSummaryView: View {
     }
 
     private var activeNextStepRow: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: 12) {
             MarkdownText(
                 activeNextStepText,
-                font: .system(size: 14, weight: .semibold),
+                font: .system(size: 13, weight: .semibold),
                 lineLimit: usesCompactLayout ? 3 : 2
             )
             .foregroundStyle(.primary)
@@ -281,30 +281,30 @@ struct TaskFocusSummaryView: View {
             .allowsTightening(true)
             .truncationMode(.tail)
 
-            Spacer(minLength: 10)
+            Spacer(minLength: 8)
 
             Button {
                 beginNextStepEditing()
             } label: {
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 28, height: 28)
                     .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .fill(FocusDeskStyle.focusAccent)
                     )
-                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
             .buttonStyle(.plain)
             .help("Edit Next Step")
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 10)
-        .padding(.vertical, 10)
+        .padding(.leading, 14)
+        .padding(.trailing, 9)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(FocusDeskStyle.focusAccent.opacity(0.12))
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(FocusDeskStyle.focusAccent.opacity(0.10))
         )
     }
 

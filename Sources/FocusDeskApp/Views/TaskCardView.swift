@@ -151,13 +151,13 @@ private struct WorkDoneInputBlock: View {
         .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(0.28))
+                .fill(FocusDeskStyle.focusSurface.opacity(0.86))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(
-                    hasDraft ? FocusDeskStyle.focusAccent.opacity(0.34) : FocusDeskStyle.focusDivider.opacity(0.58),
-                    lineWidth: 1
+                    hasDraft ? FocusDeskStyle.focusAccent.opacity(0.30) : FocusDeskStyle.focusDivider.opacity(0.22),
+                    lineWidth: 0.7
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
