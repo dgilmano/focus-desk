@@ -46,8 +46,9 @@ struct TaskFocusSummaryView: View {
                         )
 
                     nextStepPanel
-                        .frame(width: nextStepColumnWidth, alignment: .topLeading)
                         .frame(
+                            minWidth: 0,
+                            maxWidth: .infinity,
                             minHeight: compositionHeight,
                             maxHeight: compositionHeight,
                             alignment: .topLeading
@@ -63,22 +64,6 @@ struct TaskFocusSummaryView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 8) {
                 sectionLabel("Current Task")
-
-                HStack(spacing: 2) {
-                    subtleActionButton(
-                        systemName: isEditingCurrentTask ? "checkmark" : "pencil",
-                        help: isEditingCurrentTask ? "Done editing" : "Edit Current Task",
-                        isVisible: isCurrentTaskActionVisible,
-                        isHovered: $isCurrentTaskActionHovered,
-                        action: isEditingCurrentTask ? endCurrentTaskEditing : beginCurrentTaskEditing
-                    )
-
-                    alwaysVisibleActionButton(
-                        systemName: "checkmark.circle",
-                        help: "Done",
-                        action: onComplete
-                    )
-                }
 
                 Spacer(minLength: 12)
             }
@@ -103,6 +88,23 @@ struct TaskFocusSummaryView: View {
         .onHover { isHovered in
             withAnimation(.smooth(duration: 0.12)) {
                 isCurrentTaskHovered = isHovered
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            HStack(spacing: 2) {
+                subtleActionButton(
+                    systemName: isEditingCurrentTask ? "checkmark" : "arrow.up.right",
+                    help: isEditingCurrentTask ? "Done editing" : "Edit Current Task",
+                    isVisible: isCurrentTaskActionVisible,
+                    isHovered: $isCurrentTaskActionHovered,
+                    action: isEditingCurrentTask ? endCurrentTaskEditing : beginCurrentTaskEditing
+                )
+
+                alwaysVisibleActionButton(
+                    systemName: "checkmark.circle",
+                    help: "Done",
+                    action: onComplete
+                )
             }
         }
     }
@@ -248,7 +250,7 @@ struct TaskFocusSummaryView: View {
                 if !remainingNextStepsText.isEmpty {
                     MarkdownText(
                         remainingNextStepsText,
-                        font: .system(size: 13, weight: .regular),
+                        font: .system(size: 14, weight: .regular),
                         lineLimit: 5
                     )
                     .foregroundStyle(.secondary)
@@ -273,7 +275,7 @@ struct TaskFocusSummaryView: View {
         HStack(alignment: .center, spacing: 12) {
             MarkdownText(
                 activeNextStepText,
-                font: .system(size: 13, weight: .semibold),
+                font: .system(size: 14, weight: .regular),
                 lineLimit: usesCompactLayout ? 3 : 2
             )
             .foregroundStyle(.primary)
@@ -460,14 +462,6 @@ struct TaskFocusSummaryView: View {
 
     private var usesCompactLayout: Bool {
         measuredSummaryWidth && summaryWidth < compactBreakpoint
-    }
-
-    private var nextStepColumnWidth: Double {
-        guard summaryWidth > 0 else {
-            return 500
-        }
-
-        return min(max(summaryWidth * 0.42, 430), 530)
     }
 
     private var compositionHeight: Double {

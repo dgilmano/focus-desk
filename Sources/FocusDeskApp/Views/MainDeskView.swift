@@ -1230,32 +1230,33 @@ private struct TaskRotationControl: View {
     private let maxVisibleDots = 11
 
     var body: some View {
-        VStack(spacing: 7) {
-            HStack(spacing: 18) {
-                rotationButton(systemName: "chevron.left", help: "Previous Task", action: onPrevious)
-                    .keyboardShortcut(.leftArrow, modifiers: [])
+        HStack(alignment: .center, spacing: 16) {
+            rotationButton(systemName: "chevron.left", help: "Previous Task", action: onPrevious)
+                .keyboardShortcut(.leftArrow, modifiers: [])
 
+            VStack(spacing: 7) {
                 Text(rotationTitle)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
                     .monospacedDigit()
                     .frame(width: 76)
 
-                rotationButton(systemName: "chevron.right", help: "Next Task", action: onNext)
-                    .keyboardShortcut(.rightArrow, modifiers: [])
-            }
-
-            HStack(spacing: 8) {
-                ForEach(visibleDotIndices, id: \.self) { index in
-                    Circle()
-                        .fill(index == currentIndex ? FocusDeskStyle.focusAccent : Color.secondary.opacity(0.25))
-                        .frame(width: 6, height: 6)
-                        .animation(.smooth(duration: 0.16), value: currentIndex)
+                HStack(spacing: 8) {
+                    ForEach(visibleDotIndices, id: \.self) { index in
+                        Circle()
+                            .fill(index == currentIndex ? FocusDeskStyle.focusAccent : Color.secondary.opacity(0.25))
+                            .frame(width: 6, height: 6)
+                            .animation(.smooth(duration: 0.16), value: currentIndex)
+                    }
                 }
+                .frame(height: 6)
             }
-            .frame(height: 6)
+            .frame(width: 128)
+
+            rotationButton(systemName: "chevron.right", help: "Next Task", action: onNext)
+                .keyboardShortcut(.rightArrow, modifiers: [])
         }
-        .frame(width: 260)
+        .frame(width: 232)
         .frame(maxWidth: .infinity)
         .opacity(totalCount > 0 ? 1 : 0)
         .accessibilityElement(children: .combine)
