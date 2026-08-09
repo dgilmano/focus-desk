@@ -25,6 +25,27 @@ enum FocusDeskStyle {
         Color(nsColor: .selectedContentBackgroundColor).opacity(0.12)
     }
 
+    static var focusAccent: Color {
+        adaptiveColor(
+            light: NSColor(red: 0.34, green: 0.43, blue: 0.50, alpha: 1),
+            dark: NSColor(red: 0.58, green: 0.68, blue: 0.76, alpha: 1)
+        )
+    }
+
+    static var focusSurface: Color {
+        adaptiveColor(
+            light: NSColor(calibratedWhite: 0.956, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.17, alpha: 1)
+        )
+    }
+
+    static var focusDivider: Color {
+        adaptiveColor(
+            light: NSColor(calibratedWhite: 0.82, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.32, alpha: 1)
+        )
+    }
+
     static var hairline: Color {
         Color(nsColor: .separatorColor).opacity(0.55)
     }
@@ -38,6 +59,13 @@ enum FocusDeskStyle {
             }
 
             return NSColor(calibratedWhite: 0.42, alpha: 1)
+        })
+    }
+
+    private static func adaptiveColor(light: NSColor, dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let matchedAppearance = appearance.bestMatch(from: [.aqua, .darkAqua])
+            return matchedAppearance == .darkAqua ? dark : light
         })
     }
 }

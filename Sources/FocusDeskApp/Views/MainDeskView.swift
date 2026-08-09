@@ -691,26 +691,6 @@ struct MainDeskView: View {
 
             Spacer()
 
-            if selectedSection == .desk {
-                Button {
-                    selectPreviousTask()
-                } label: {
-                    Label("Previous", systemImage: "chevron.left")
-                }
-                .labelStyle(.iconOnly)
-                .keyboardShortcut(.leftArrow, modifiers: [])
-                .help("Previous Task")
-
-                Button {
-                    selectNextTask()
-                } label: {
-                    Label("Next", systemImage: "chevron.right")
-                }
-                .labelStyle(.iconOnly)
-                .keyboardShortcut(.rightArrow, modifiers: [])
-                .help("Next Task")
-            }
-
             if selectedSection != .newTask {
                 Button {
                     selectedSection = .newTask
@@ -875,9 +855,19 @@ struct MainDeskView: View {
     private func taskWorkspace(_ task: FocusTask) -> some View {
         GeometryReader { proxy in
             let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
+            let compositionWidth = min(contentWidth, 1080)
+            let currentTaskIndex = activeTasks.firstIndex { $0.id == task.id } ?? 0
 
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 34) {
+                    TaskRotationControl(
+                        currentIndex: currentTaskIndex,
+                        totalCount: activeTasks.count,
+                        onPrevious: selectPreviousTask,
+                        onNext: selectNextTask
+                    )
+                    .padding(.top, 2)
+
                     TaskFocusSummaryView(
                         task: task,
                         availableTags: availableTagRecords,
@@ -889,9 +879,6 @@ struct MainDeskView: View {
                         .id("summary-\(task.id.uuidString)")
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
                         .zIndex(1)
-
-                    MotivationBlockView(task: task, onMotivationChanged: saveContext)
-                        .zIndex(0)
 
                     TaskCardView(
                         task: task,
@@ -927,11 +914,11 @@ struct MainDeskView: View {
                             }
                     )
                 }
-                .frame(minWidth: contentWidth, maxWidth: .infinity, alignment: .topLeading)
+                .frame(maxWidth: compositionWidth, alignment: .topLeading)
                 .padding(.horizontal, workspaceHorizontalPadding)
                 .padding(.top, 34)
                 .padding(.bottom, 28)
-                .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .topLeading)
+                .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .top)
             }
         }
     }
@@ -1183,6 +1170,85 @@ struct MainDeskView: View {
 
     private func refreshWidgetSnapshot() {
         WidgetSnapshotWriter.write(currentTask: currentTask, activeTaskCount: activeTasks.count)
+    }
+}
+
+private struct TaskRotationControl: View {
+    var currentIndex: Int
+    var totalCount: Int
+    var onPrevious: () -> Void
+    var onNext: () -> Void
+
+    private let maxVisibleDots = 11
+
+    var body: some View {
+        HStack(spacing: 18) {
+            rotationButton(systemName: "chevron.left", help: "Previous Task", action: onPrevious)
+                .keyboardShortcut(.leftArrow, modifiers: [])
+
+            VStack(spacing: 8) {
+                Text(rotationTitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                HStack(spacing: 6) {
+                    ForEach(visibleDotIndices, id: \.self) { index in
+                        Circle()
+                            .fill(index == currentIndex ? FocusDeskStyle.focusAccent : Color.secondary.opacity(0.24))
+                            .frame(
+                                width: index == currentIndex ? 6 : 4,
+                                height: index == currentIndex ? 6 : 4
+                            )
+                            .animation(.smooth(duration: 0.16), value: currentIndex)
+                    }
+                }
+                .frame(height: 8)
+            }
+            .frame(minWidth: 118)
+
+            rotationButton(systemName: "chevron.right", help: "Next Task", action: onNext)
+                .keyboardShortcut(.rightArrow, modifiers: [])
+        }
+        .frame(maxWidth: .infinity)
+        .opacity(totalCount > 0 ? 1 : 0)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(rotationTitle)
+    }
+
+    private func rotationButton(
+        systemName: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(totalCount <= 1)
+        .help(help)
+    }
+
+    private var rotationTitle: String {
+        guard totalCount > 0 else {
+            return "No tasks"
+        }
+
+        return "Task \(currentIndex + 1) of \(totalCount)"
+    }
+
+    private var visibleDotIndices: [Int] {
+        guard totalCount > maxVisibleDots else {
+            return Array(0..<totalCount)
+        }
+
+        let halfWindow = maxVisibleDots / 2
+        let lowerBound = min(max(currentIndex - halfWindow, 0), totalCount - maxVisibleDots)
+        return Array(lowerBound..<(lowerBound + maxVisibleDots))
     }
 }
 
@@ -2574,52 +2640,6 @@ private struct NewTaskWorkspaceView: View {
 
         onCreate(draft)
         resetDraft()
-    }
-}
-
-private struct MotivationBlockView: View {
-    @Bindable var task: FocusTask
-    var onMotivationChanged: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            TextField("", text: motivationText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.primary)
-                .accessibilityLabel("Your motivation")
-
-            if currentMotivation.isEmpty {
-                Text("Your motivation")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.tertiary)
-                    .allowsHitTesting(false)
-            }
-        }
-        .padding(.horizontal, 17)
-        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(FocusDeskStyle.sidebarBackground)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-    }
-
-    private var currentMotivation: String {
-        task.motivation ?? ""
-    }
-
-    private var motivationText: Binding<String> {
-        Binding(
-            get: {
-                task.motivation ?? ""
-            },
-            set: { newValue in
-                task.motivation = newValue
-                task.updatedAt = Date()
-                onMotivationChanged()
-            }
-        )
     }
 }
 

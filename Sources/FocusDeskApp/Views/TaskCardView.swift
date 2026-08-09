@@ -13,7 +13,7 @@ struct TaskCardView: View {
     var onDeleteJournalEntry: (ProgressEntry) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 30) {
             if showsHeader {
                 HStack(alignment: .top, spacing: 14) {
                     FocusDeskIcon(systemName: "target", filled: true)
@@ -38,50 +38,57 @@ struct TaskCardView: View {
                 }
             }
 
-            WorkDoneInputBlock(
-                task: task,
-                isSavingStep: isSavingStep,
-                noteFocused: noteFocused,
-                onDraftChanged: onDraftChanged,
-                onSaveJournalEntry: onSaveJournalEntry
-            )
+            VStack(alignment: .leading, spacing: 13) {
+                Text("What Was Done")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.6)
+                    .textCase(.uppercase)
 
-            FocusDeskGroupedPanel {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Journal")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.primary)
+                WorkDoneInputBlock(
+                    task: task,
+                    isSavingStep: isSavingStep,
+                    noteFocused: noteFocused,
+                    onDraftChanged: onDraftChanged,
+                    onSaveJournalEntry: onSaveJournalEntry
+                )
 
-                    if task.newestEntries.isEmpty {
-                        Text("No journal entries yet.")
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    } else {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(task.newestEntries.enumerated()), id: \.element.id) { index, entry in
-                                ProgressEntryRow(
-                                    entry: entry,
-                                    onEntryChanged: onJournalEntryChanged,
-                                    onDelete: {
-                                        onDeleteJournalEntry(entry)
-                                    }
-                                )
-
-                                if index < task.newestEntries.count - 1 {
-                                    Divider()
-                                        .padding(.leading, 0)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(18)
+                TaskProgressView(stepCount: task.newestEntries.count)
             }
 
-            TaskProgressView(stepCount: task.newestEntries.count)
+            journalTimeline
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var journalTimeline: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Journal")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .tracking(0.6)
+                .textCase(.uppercase)
+
+            if task.newestEntries.isEmpty {
+                Text("No journal entries yet.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            } else {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(task.newestEntries.enumerated()), id: \.element.id) { index, entry in
+                        ProgressEntryRow(
+                            entry: entry,
+                            isLast: index == task.newestEntries.count - 1,
+                            onEntryChanged: onJournalEntryChanged,
+                            onDelete: {
+                                onDeleteJournalEntry(entry)
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -94,7 +101,7 @@ private struct WorkDoneInputBlock: View {
     var onSaveJournalEntry: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             ZStack(alignment: .leading) {
                 TextField("", text: $task.localDraft)
                     .textFieldStyle(.plain)
@@ -108,7 +115,7 @@ private struct WorkDoneInputBlock: View {
                     }
 
                 if task.localDraft.isEmpty {
-                    Text("What was done")
+                    Text("What was done and where did you stop?")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(.tertiary)
                         .allowsHitTesting(false)
@@ -119,24 +126,39 @@ private struct WorkDoneInputBlock: View {
             Button {
                 onSaveJournalEntry()
             } label: {
-                Image(systemName: isSavingStep ? "clock" : "checkmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(hasDraft ? .secondary : .tertiary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+                HStack(spacing: 6) {
+                    if hasDraft {
+                        Text("Save")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+
+                    Image(systemName: isSavingStep ? "clock" : "checkmark")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(hasDraft ? FocusDeskStyle.focusAccent : Color(nsColor: .tertiaryLabelColor))
+                .padding(.horizontal, hasDraft ? 10 : 0)
+                .frame(minWidth: hasDraft ? 58 : 24, minHeight: 24)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(!hasDraft || isSavingStep)
-            .help("Save to Journal")
+            .help("Save Progress")
         }
-        .padding(.leading, 17)
-        .padding(.trailing, 12)
-        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .center)
+        .padding(.leading, 15)
+        .padding(.trailing, 10)
+        .frame(maxWidth: .infinity, minHeight: 46, maxHeight: 46, alignment: .center)
         .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(FocusDeskStyle.sidebarBackground)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(FocusDeskStyle.focusSurface)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    hasDraft ? FocusDeskStyle.focusAccent.opacity(0.26) : FocusDeskStyle.focusDivider.opacity(0.28),
+                    lineWidth: 0.7
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var hasDraft: Bool {
@@ -164,51 +186,49 @@ private struct TaskProgressView: View {
     }
 
     var body: some View {
-        FocusDeskGroupedPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("Task Progress")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.primary)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Task Progress")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.tertiary)
 
-                    Spacer()
+                Spacer()
 
-                    Text(progressText)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.tertiary)
-                }
+                Text(progressText)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.tertiary)
+            }
 
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule(style: .continuous)
-                            .fill(Color.secondary.opacity(0.13))
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(Color.secondary.opacity(0.12))
 
-                        Capsule(style: .continuous)
-                            .fill(Color.secondary.opacity(0.42))
-                            .frame(width: proxy.size.width * completedFraction)
-                    }
-                }
-                .frame(height: 8)
-
-                HStack {
-                    Text("Useful steps logged in Journal")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(.tertiary)
-
-                    Spacer()
-
-                    Text("\(stepCount) /")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(.tertiary)
+                    Capsule(style: .continuous)
+                        .fill(FocusDeskStyle.focusAccent.opacity(0.42))
+                        .frame(width: proxy.size.width * completedFraction)
                 }
             }
-            .padding(18)
+            .frame(height: 5)
+
+            HStack {
+                Text("Useful steps logged in Journal")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.tertiary)
+
+                Spacer()
+
+                Text("\(stepCount) /")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 }
 
 private struct ProgressEntryRow: View {
     @Bindable var entry: ProgressEntry
+    var isLast: Bool
     var onEntryChanged: () -> Void
     var onDelete: () -> Void
 
@@ -222,45 +242,64 @@ private struct ProgressEntryRow: View {
     private let collapsedNoteLineLimit = 3
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(DateFormatting.journalString(from: entry.timestamp))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.trailing, 66)
+        HStack(alignment: .top, spacing: 13) {
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(FocusDeskStyle.focusAccent.opacity(0.62))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 6)
 
-            if isEditing {
-                noteEditor
-            } else {
-                MarkdownText(
-                    entry.note,
-                    font: .system(size: 13, weight: .regular),
-                    lineLimit: isExpanded ? nil : collapsedNoteLineLimit
-                )
+                if !isLast {
+                    Rectangle()
+                        .fill(FocusDeskStyle.focusDivider.opacity(0.52))
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
+                        .padding(.top, 5)
+                }
+            }
+            .frame(width: 10)
+            .frame(minHeight: 34)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(DateFormatting.journalString(from: entry.timestamp))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .padding(.trailing, 66)
+
+                if isEditing {
+                    noteEditor
+                } else {
+                    MarkdownText(
+                        entry.note,
+                        font: .system(size: 13, weight: .regular),
+                        lineLimit: isExpanded ? nil : collapsedNoteLineLimit
+                    )
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-            }
-
-            if !isEditing && isExpandable {
-                Button {
-                    withAnimation(.smooth(duration: 0.18)) {
-                        isExpanded.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(isExpanded ? "Show less" : "Show more")
-
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 10, weight: .regular))
-                    }
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.tertiary)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .padding(.top, 3)
+
+                if !isEditing && isExpandable {
+                    Button {
+                        withAnimation(.smooth(duration: 0.18)) {
+                            isExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(isExpanded ? "Show less" : "Show more")
+
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .regular))
+                        }
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.tertiary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 3)
+                }
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onHover { hovered in
