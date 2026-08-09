@@ -41,7 +41,7 @@ struct TaskCardView: View {
             VStack(alignment: .leading, spacing: 13) {
                 Text("What Was Done")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.86))
                     .textCase(.uppercase)
 
                 WorkDoneInputBlock(

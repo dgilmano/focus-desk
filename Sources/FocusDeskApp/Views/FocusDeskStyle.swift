@@ -27,8 +27,8 @@ enum FocusDeskStyle {
 
     static var focusAccent: Color {
         adaptiveColor(
-            light: NSColor(red: 0.18, green: 0.47, blue: 0.92, alpha: 1),
-            dark: NSColor(red: 0.55, green: 0.72, blue: 0.98, alpha: 1)
+            light: NSColor(red: 0.38, green: 0.44, blue: 0.49, alpha: 1),
+            dark: NSColor(red: 0.62, green: 0.68, blue: 0.72, alpha: 1)
         )
     }
 

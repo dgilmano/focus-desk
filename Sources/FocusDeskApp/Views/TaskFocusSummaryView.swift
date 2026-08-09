@@ -24,7 +24,7 @@ struct TaskFocusSummaryView: View {
     @FocusState private var nextStepEditorFocused: Bool
 
     private let compactBreakpoint = 820.0
-    private let summarySpacing = 68.0
+    private let summarySpacing = 58.0
     private let compactSummarySpacing = 28.0
 
     var body: some View {
@@ -37,10 +37,21 @@ struct TaskFocusSummaryView: View {
             } else {
                 HStack(alignment: .top, spacing: summarySpacing) {
                     currentTaskColumn
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
+                        .frame(
+                            minWidth: 0,
+                            maxWidth: .infinity,
+                            minHeight: compositionHeight,
+                            maxHeight: compositionHeight,
+                            alignment: .topLeading
+                        )
 
                     nextStepPanel
                         .frame(width: nextStepColumnWidth, alignment: .topLeading)
+                        .frame(
+                            minHeight: compositionHeight,
+                            maxHeight: compositionHeight,
+                            alignment: .topLeading
+                        )
                 }
             }
         }
@@ -79,8 +90,14 @@ struct TaskFocusSummaryView: View {
                 taskTitleBlock
             }
 
-            motivationSection
-                .padding(.top, 46)
+            if usesCompactLayout {
+                motivationSection
+                    .padding(.top, 38)
+            } else {
+                Spacer(minLength: 18)
+
+                motivationSection
+            }
         }
         .contentShape(Rectangle())
         .onHover { isHovered in
@@ -151,6 +168,7 @@ struct TaskFocusSummaryView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 86, alignment: .topLeading)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(FocusDeskStyle.focusSurface.opacity(0.86))
@@ -196,8 +214,8 @@ struct TaskFocusSummaryView: View {
                 .minimumScaleFactor(0.75)
                 .allowsTightening(true)
         }
-        .padding(26)
-        .frame(maxWidth: .infinity, minHeight: usesCompactLayout ? 218 : 318, alignment: .topLeading)
+        .padding(24)
+        .frame(maxWidth: .infinity, minHeight: usesCompactLayout ? 202 : compositionHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(FocusDeskStyle.focusSurface)
@@ -219,22 +237,19 @@ struct TaskFocusSummaryView: View {
         VStack(alignment: .leading, spacing: 14) {
             if currentNextStep.isEmpty {
                 Text("Add a next step.")
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(.tertiary)
                     .lineLimit(2)
             } else {
                 activeNextStepRow
 
-                if !remainingNextStepsText.isEmpty {
-                    Rectangle()
-                        .fill(FocusDeskStyle.focusDivider.opacity(0.38))
-                        .frame(height: 1)
-                        .padding(.vertical, 1)
+                nextStepDivider
 
+                if !remainingNextStepsText.isEmpty {
                     MarkdownText(
                         remainingNextStepsText,
-                        font: .system(size: 15, weight: .regular),
-                        lineLimit: usesCompactLayout ? 5 : 8
+                        font: .system(size: 13, weight: .regular),
+                        lineLimit: 5
                     )
                     .foregroundStyle(.secondary)
                     .minimumScaleFactor(0.78)
@@ -246,11 +261,19 @@ struct TaskFocusSummaryView: View {
         .textSelection(.enabled)
     }
 
+    private var nextStepDivider: some View {
+        Rectangle()
+            .fill(FocusDeskStyle.focusDivider.opacity(0.42))
+            .frame(height: 1)
+            .padding(.top, -2)
+            .padding(.bottom, 2)
+    }
+
     private var activeNextStepRow: some View {
         HStack(alignment: .center, spacing: 14) {
             MarkdownText(
                 activeNextStepText,
-                font: .system(size: 16, weight: .semibold),
+                font: .system(size: 14, weight: .semibold),
                 lineLimit: usesCompactLayout ? 3 : 2
             )
             .foregroundStyle(.primary)
@@ -264,9 +287,9 @@ struct TaskFocusSummaryView: View {
                 beginNextStepEditing()
             } label: {
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
+                    .frame(width: 34, height: 34)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(FocusDeskStyle.focusAccent)
@@ -276,9 +299,9 @@ struct TaskFocusSummaryView: View {
             .buttonStyle(.plain)
             .help("Edit Next Step")
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 12)
-        .padding(.vertical, 12)
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
+        .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(FocusDeskStyle.focusAccent.opacity(0.12))
@@ -387,7 +410,7 @@ struct TaskFocusSummaryView: View {
     private func sectionLabel(_ title: String) -> some View {
         Text(title.uppercased())
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.primary.opacity(0.86))
     }
 
     private func subtleActionButton(
@@ -441,10 +464,14 @@ struct TaskFocusSummaryView: View {
 
     private var nextStepColumnWidth: Double {
         guard summaryWidth > 0 else {
-            return 560
+            return 500
         }
 
-        return min(max(summaryWidth * 0.48, 500), 620)
+        return min(max(summaryWidth * 0.42, 430), 530)
+    }
+
+    private var compositionHeight: Double {
+        usesCompactLayout ? 0 : 264
     }
 
     private var currentTitleFontSize: Double {
