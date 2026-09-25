@@ -1,3 +1,4 @@
+import AppKit
 import FocusDeskCore
 import SwiftData
 import SwiftUI
@@ -18,6 +19,9 @@ struct ActivityDayMapView: View {
     @Binding var selectedDate: Date?
     @State private var draft: ActivityIntervalDraft?
     @State private var showingSettings = false
+    @AppStorage("dayMapTimelineProportion") private var timelineProportion = ActivityDayMapSplitLayout.defaultProportion
+    @State private var dividerDragStartWidth: CGFloat?
+    @State private var isDividerHovered = false
     var now: Date
     var availableWidth: CGFloat
 
@@ -29,25 +33,26 @@ struct ActivityDayMapView: View {
     var body: some View {
         let segments = ActivityTimeline.segments(on: day, intervals: store.snapshots, now: liveNow)
         let totals = ActivityTimeline.totals(for: segments)
+        let layout = ActivityDayMapSplitLayout(availableWidth: availableWidth, proportion: timelineProportion)
         VStack(alignment: .leading, spacing: 16) {
             if let notice = store.notice, Calendar.current.isDate(day, inSameDayAs: liveNow) {
                 Text(notice).font(.system(size: 12)).foregroundStyle(.secondary)
             }
 
-            if availableWidth >= 650 {
-                HStack(alignment: .top, spacing: 24) {
-                    timeline(segments)
-                        .frame(width: (availableWidth - 49) * 0.6)
+            if layout.isHorizontal {
+                HStack(alignment: .top, spacing: ActivityDayMapSplitLayout.gutter) {
+                    timeline(segments, width: layout.timelineWidth)
+                        .frame(width: layout.timelineWidth)
                     balance(segments, totals: totals)
-                        .padding(.leading, 24)
-                        .overlay(alignment: .leading) {
-                            Rectangle().fill(FocusDeskStyle.hairline).frame(width: 1)
-                        }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: layout.balanceWidth)
+                }
+                .overlay(alignment: .leading) {
+                    columnDivider(layout)
+                        .offset(x: layout.timelineWidth + ActivityDayMapSplitLayout.gutter / 2 - 7)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 24) {
-                    timeline(segments)
+                    timeline(segments, width: availableWidth)
                     Divider()
                     balance(segments, totals: totals)
                 }
@@ -63,7 +68,54 @@ struct ActivityDayMapView: View {
         .sheet(isPresented: $showingSettings) { ActivityCategoriesView() }
     }
 
-    private func timeline(_ segments: [ActivityDaySegment]) -> some View {
+    private func columnDivider(_ layout: ActivityDayMapSplitLayout) -> some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.001))
+            .frame(width: 14)
+            .overlay {
+                Rectangle()
+                    .fill(isDividerHovered || dividerDragStartWidth != nil ? Color.secondary : FocusDeskStyle.hairline)
+                    .frame(width: 1)
+            }
+            .contentShape(Rectangle())
+            .onHover { hovered in
+                guard hovered != isDividerHovered else { return }
+                isDividerHovered = hovered
+                if hovered { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .highPriorityGesture(
+                // Global coordinates keep the drag stable while the divider itself moves.
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { value in
+                        if dividerDragStartWidth == nil { dividerDragStartWidth = layout.timelineWidth }
+                        let width = (dividerDragStartWidth ?? layout.timelineWidth) + value.translation.width
+                        timelineProportion = layout.proportion(forTimelineWidth: width)
+                    }
+                    .onEnded { _ in dividerDragStartWidth = nil }
+            )
+            .onDisappear {
+                dividerDragStartWidth = nil
+                if isDividerHovered {
+                    NSCursor.pop()
+                    isDividerHovered = false
+                }
+            }
+            .help("Resize columns")
+            .accessibilityElement()
+            .accessibilityLabel("Resize Day timeline and Daily balance")
+            .accessibilityValue("\(Int(layout.proportion(forTimelineWidth: layout.timelineWidth) * 100)) percent timeline")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    timelineProportion = layout.proportion(forTimelineWidth: layout.timelineWidth + 24)
+                case .decrement:
+                    timelineProportion = layout.proportion(forTimelineWidth: layout.timelineWidth - 24)
+                @unknown default: break
+                }
+            }
+    }
+
+    private func timeline(_ segments: [ActivityDaySegment], width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Day timeline").font(.system(size: 17, weight: .semibold))
@@ -88,7 +140,7 @@ struct ActivityDayMapView: View {
                         taskTitle: record?.taskTitle, isActive: isActive,
                         isFirst: segment.id == segments.first?.id,
                         isLast: segment.id == segments.last?.id, dayEnd: dayRange.end,
-                        showsInlineRange: availableWidth >= 850
+                        showsInlineRange: width >= 480
                     ) { edit(segment) }
                 }
             }
