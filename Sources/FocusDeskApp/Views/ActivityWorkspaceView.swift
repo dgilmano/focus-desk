@@ -5,7 +5,7 @@ struct ActivityWorkspaceView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let contentWidth = max(0, geometry.size.width - 56)
+            let contentWidth = max(0, geometry.size.width - FocusDeskStyle.workspaceHorizontalPadding * 2)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ActivityPaletteView(availableWidth: contentWidth)
@@ -21,8 +21,8 @@ struct ActivityWorkspaceView: View {
                     }
                 }
                 .frame(width: contentWidth, alignment: .leading)
-                .padding(.horizontal, 28)
-                .padding(.top, 64)
+                .padding(.horizontal, FocusDeskStyle.workspaceHorizontalPadding)
+                .padding(.top, FocusDeskStyle.workspaceTopPadding)
                 .padding(.bottom, 28)
             }
         }

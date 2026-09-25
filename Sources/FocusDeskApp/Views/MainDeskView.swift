@@ -74,7 +74,7 @@ struct MainDeskView: View {
     private let collapsedSidebarWidth = 58.0
     private let collapsedSidebarBackgroundTopPadding = 62.0
     private let collapsedSidebarControlTopPadding = 74.0
-    private let workspaceHorizontalPadding = 28.0
+    private let workspaceHorizontalPadding = FocusDeskStyle.workspaceHorizontalPadding
 
     private var activeTasks: [FocusTask] {
         tasks
@@ -709,76 +709,51 @@ struct MainDeskView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(selectedSection == .dayMap ? ActivityAppearance.canvas : FocusDeskStyle.appBackground)
+        .background(selectedSection == .dayMap || selectedSection == .desk ? FocusDeskStyle.workspaceBackground : FocusDeskStyle.appBackground)
     }
 
     private var detailToolbar: some View {
-        Group {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(toolbarTitle)
+                    .font(.system(size: 26, weight: .semibold))
+
+                if selectedSection != .dayMap && selectedSection != .desk {
+                    Text(toolbarSubtitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
             if selectedSection == .desk {
-                ZStack {
-                    TaskRotationControl(
-                        currentIndex: currentTaskIndex,
-                        totalCount: activeTasks.count,
-                        onPrevious: selectPreviousTask,
-                        onNext: selectNextTask
-                    )
+                TaskRotationControl(
+                    currentIndex: currentTaskIndex,
+                    totalCount: activeTasks.count,
+                    onPrevious: selectPreviousTask,
+                    onNext: selectNextTask
+                )
+            }
 
-                    HStack(spacing: 12) {
-                        Spacer()
-
-                        toolbarIconButton(
-                            systemName: "plus",
-                            help: "New Task"
-                        ) {
-                            selectedSection = .newTask
-                        }
-
-                        toolbarIconButton(
-                            systemName: isDarkTheme ? "sun.max" : "moon",
-                            help: isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme"
-                        ) {
-                            isDarkTheme.toggle()
-                        }
-                    }
+            if selectedSection == .dayMap {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    ActivityDateControls(selectedDate: $selectedActivityDate, now: context.date)
                 }
-            } else {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(toolbarTitle)
-                            .font(.system(size: 26, weight: .semibold))
+            }
 
-                        if selectedSection != .dayMap {
-                            Text(toolbarSubtitle)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-
-                    Spacer()
-
-                    if selectedSection == .dayMap {
-                        TimelineView(.periodic(from: .now, by: 30)) { context in
-                            ActivityDateControls(selectedDate: $selectedActivityDate, now: context.date)
-                        }
-                    }
-
-                    if selectedSection != .newTask && selectedSection != .dayMap {
-                        toolbarIconButton(
-                            systemName: "plus",
-                            help: "New Task"
-                        ) {
-                            selectedSection = .newTask
-                        }
-                    }
-
-                    toolbarIconButton(
-                        systemName: isDarkTheme ? "sun.max" : "moon",
-                        help: isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme"
-                    ) {
-                        isDarkTheme.toggle()
-                    }
+            if selectedSection != .newTask && selectedSection != .dayMap {
+                toolbarIconButton(systemName: "plus", help: "New Task") {
+                    selectedSection = .newTask
                 }
+            }
+
+            toolbarIconButton(
+                systemName: isDarkTheme ? "sun.max" : "moon",
+                help: isDarkTheme ? "Switch to Light Theme" : "Switch to Dark Theme"
+            ) {
+                isDarkTheme.toggle()
             }
         }
         .padding(.leading, workspaceHorizontalPadding)
@@ -962,12 +937,11 @@ struct MainDeskView: View {
     private func taskWorkspace(_ task: FocusTask) -> some View {
         GeometryReader { proxy in
             let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
-            let compositionWidth = min(contentWidth, 1210)
-
             ScrollView {
-                VStack(spacing: 46) {
+                VStack(spacing: 28) {
                     TaskFocusSummaryView(
                         task: task,
+                        availableWidth: contentWidth,
                         availableTags: availableTagRecords,
                         onTaskChanged: saveContext,
                         onComplete: {
@@ -980,6 +954,7 @@ struct MainDeskView: View {
 
                     TaskCardView(
                         task: task,
+                        availableWidth: contentWidth,
                         showsHeader: false,
                         isSavingStep: isSavingStep,
                         noteFocused: $noteFocused,
@@ -1012,9 +987,9 @@ struct MainDeskView: View {
                             }
                     )
                 }
-                .frame(maxWidth: compositionWidth, alignment: .topLeading)
+                .frame(width: contentWidth, alignment: .topLeading)
                 .padding(.horizontal, workspaceHorizontalPadding)
-                .padding(.top, 98)
+                .padding(.top, FocusDeskStyle.workspaceTopPadding)
                 .padding(.bottom, 28)
                 .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .top)
             }
@@ -1277,40 +1252,24 @@ private struct TaskRotationControl: View {
     var onPrevious: () -> Void
     var onNext: () -> Void
 
-    private let maxVisibleDots = 11
-
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(spacing: 0) {
             rotationButton(systemName: "chevron.left", help: "Previous Task", action: onPrevious)
                 .keyboardShortcut(.leftArrow, modifiers: [])
 
-            VStack(spacing: 7) {
-                Text(rotationTitle)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-                    .frame(width: 76)
-
-                HStack(spacing: 8) {
-                    ForEach(visibleDotIndices, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentIndex ? FocusDeskStyle.focusAccent : Color.secondary.opacity(0.25))
-                            .frame(width: 6, height: 6)
-                            .animation(.smooth(duration: 0.16), value: currentIndex)
-                    }
-                }
-                .frame(height: 6)
-            }
-            .frame(width: 128)
+            Text(rotationTitle)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .frame(width: 100, height: 30)
 
             rotationButton(systemName: "chevron.right", help: "Next Task", action: onNext)
                 .keyboardShortcut(.rightArrow, modifiers: [])
         }
-        .frame(width: 232)
-        .frame(maxWidth: .infinity)
-        .opacity(totalCount > 0 ? 1 : 0)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(rotationTitle)
+        .padding(.horizontal, 3)
+        .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(FocusDeskStyle.hairline) }
+        .fixedSize()
     }
 
     private func rotationButton(
@@ -1320,18 +1279,15 @@ private struct TaskRotationControl: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(.primary)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(FocusDeskStyle.focusSurface)
-                )
-                .contentShape(Circle())
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(totalCount <= 1)
         .help(help)
+        .accessibilityLabel(help)
     }
 
     private var rotationTitle: String {
@@ -1340,16 +1296,6 @@ private struct TaskRotationControl: View {
         }
 
         return "Task \(currentIndex + 1) of \(totalCount)"
-    }
-
-    private var visibleDotIndices: [Int] {
-        guard totalCount > maxVisibleDots else {
-            return Array(0..<totalCount)
-        }
-
-        let halfWindow = maxVisibleDots / 2
-        let lowerBound = min(max(currentIndex - halfWindow, 0), totalCount - maxVisibleDots)
-        return Array(lowerBound..<(lowerBound + maxVisibleDots))
     }
 }
 

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TaskCardView: View {
     @Bindable var task: FocusTask
+    var availableWidth: CGFloat
 
     var showsHeader = true
     var isSavingStep = false
@@ -38,43 +39,51 @@ struct TaskCardView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 13) {
-                Text("What Was Done")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.primary.opacity(0.86))
-                    .textCase(.uppercase)
-
-                WorkDoneInputBlock(
-                    task: task,
-                    isSavingStep: isSavingStep,
-                    noteFocused: noteFocused,
-                    onDraftChanged: onDraftChanged,
-                    onSaveJournalEntry: onSaveJournalEntry
-                )
-            }
-
             Rectangle()
-                .fill(FocusDeskStyle.focusDivider.opacity(0.34))
+                .fill(FocusDeskStyle.hairline)
                 .frame(height: 1)
-                .padding(.top, 2)
-                .padding(.bottom, 2)
+                .padding(.top, showsHeader ? 2 : 0)
 
+            lowerActivityGrid
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var lowerActivityGrid: some View {
+        WorkspaceColumns(availableWidth: availableWidth) {
+            workDoneSection
+        } trailing: {
             journalTimeline
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var workDoneSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What was done")
+                .font(FocusDeskStyle.workspaceSectionFont)
+                .frame(height: 28)
+
+            WorkDoneInputBlock(
+                task: task,
+                isSavingStep: isSavingStep,
+                noteFocused: noteFocused,
+                onDraftChanged: onDraftChanged,
+                onSaveJournalEntry: onSaveJournalEntry
+            )
+        }
     }
 
     private var journalTimeline: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Journal")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+                .font(FocusDeskStyle.workspaceSectionFont)
+                .frame(height: 28)
 
             if task.newestEntries.isEmpty {
                 Text("No journal entries yet.")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(.tertiary)
+                    .font(FocusDeskStyle.workspaceBodyFont)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             } else {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -107,7 +116,7 @@ private struct WorkDoneInputBlock: View {
             ZStack(alignment: .leading) {
                 TextField("", text: $task.localDraft)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13, weight: .regular))
+                    .font(FocusDeskStyle.workspaceBodyFont)
                     .foregroundStyle(.primary)
                     .accessibilityLabel("What was done")
                     .focused(noteFocused)
@@ -118,7 +127,8 @@ private struct WorkDoneInputBlock: View {
 
                 if task.localDraft.isEmpty {
                     Text("What was done and where did you stop?")
-                        .font(.system(size: 13, weight: .regular))
+                        .font(FocusDeskStyle.workspaceBodyFont)
+                        .lineLimit(1)
                         .foregroundStyle(.tertiary)
                         .allowsHitTesting(false)
                 }
@@ -128,39 +138,32 @@ private struct WorkDoneInputBlock: View {
             Button {
                 onSaveJournalEntry()
             } label: {
-                HStack(spacing: 6) {
-                    if hasDraft {
-                        Text("Save")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-
-                    Image(systemName: isSavingStep ? "clock" : "checkmark")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(hasDraft ? FocusDeskStyle.focusAccent : Color(nsColor: .tertiaryLabelColor))
-                .padding(.horizontal, hasDraft ? 10 : 0)
-                .frame(minWidth: hasDraft ? 58 : 24, minHeight: 24)
-                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Image(systemName: isSavingStep ? "clock" : "checkmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(hasDraft ? Color.teal : Color(nsColor: .tertiaryLabelColor))
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!hasDraft || isSavingStep)
             .help("Save Progress")
+            .accessibilityLabel("Save Progress")
         }
-        .padding(.leading, 15)
+        .padding(.leading, 12)
         .padding(.trailing, 10)
-        .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58, alignment: .center)
+        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48, alignment: .center)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(FocusDeskStyle.focusSurface.opacity(0.86))
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(FocusDeskStyle.focusSurface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .stroke(
-                    hasDraft ? FocusDeskStyle.focusAccent.opacity(0.30) : FocusDeskStyle.focusDivider.opacity(0.22),
-                    lineWidth: 0.7
+                    hasDraft ? Color.teal.opacity(0.3) : FocusDeskStyle.hairline,
+                    lineWidth: 1
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var hasDraft: Bool {
@@ -187,13 +190,13 @@ private struct ProgressEntryRow: View {
         HStack(alignment: .top, spacing: 13) {
             VStack(spacing: 0) {
                 Circle()
-                    .fill(Color.secondary.opacity(0.58))
+                    .fill(Color.teal.opacity(0.7))
                     .frame(width: 6, height: 6)
                     .padding(.top, 6)
 
                 if !isLast {
                     Rectangle()
-                        .fill(Color.secondary.opacity(0.30))
+                        .fill(FocusDeskStyle.hairline)
                         .frame(width: 1)
                         .frame(maxHeight: .infinity)
                         .padding(.top, 5)
@@ -204,7 +207,7 @@ private struct ProgressEntryRow: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(DateFormatting.journalString(from: entry.timestamp))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.primary)
                     .padding(.trailing, 66)
 
@@ -213,7 +216,7 @@ private struct ProgressEntryRow: View {
                 } else {
                     MarkdownText(
                         entry.note,
-                        font: .system(size: 13, weight: .regular),
+                        font: FocusDeskStyle.workspaceBodyFont,
                         lineLimit: isExpanded ? nil : collapsedNoteLineLimit
                     )
                     .foregroundStyle(.primary.opacity(0.82))
@@ -268,7 +271,7 @@ private struct ProgressEntryRow: View {
     private var noteEditor: some View {
         ZStack(alignment: .topLeading) {
             TextEditor(text: entryNoteBinding)
-                .font(.system(size: 13, weight: .regular))
+                .font(FocusDeskStyle.workspaceBodyFont)
                 .foregroundStyle(.secondary)
                 .scrollContentBackground(.hidden)
                 .padding(8)
@@ -278,7 +281,7 @@ private struct ProgressEntryRow: View {
 
             if entry.note.isEmpty {
                 Text("Journal entry")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(FocusDeskStyle.workspaceBodyFont)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 16)
@@ -286,8 +289,8 @@ private struct ProgressEntryRow: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(0.66))
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(FocusDeskStyle.focusSurface)
         )
     }
 
@@ -375,7 +378,7 @@ private struct ProgressEntryRow: View {
             return fallbackNoteLineCount
         }
 
-        let font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        let font = NSFont.systemFont(ofSize: 12, weight: .regular)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineBreakMode = .byWordWrapping
 
@@ -389,7 +392,7 @@ private struct ProgressEntryRow: View {
 
         let lineHeight = max(font.ascender - font.descender + font.leading, 1)
         let boundingRect = attributedString.boundingRect(
-            with: NSSize(width: rowWidth, height: CGFloat.greatestFiniteMagnitude),
+            with: NSSize(width: max(1, rowWidth - 23), height: CGFloat.greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
 

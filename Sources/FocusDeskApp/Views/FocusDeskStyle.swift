@@ -1,6 +1,15 @@
 import SwiftUI
 
 enum FocusDeskStyle {
+    static let workspaceHorizontalPadding: CGFloat = 28
+    static let workspaceTopPadding: CGFloat = 64
+    static let workspaceColumnSpacing: CGFloat = 49
+    static let workspaceCompactBreakpoint: CGFloat = 650
+    static let workspaceSectionFont = Font.system(size: 17, weight: .semibold)
+    static let workspaceBodyFont = Font.system(size: 12)
+
+    static var workspaceBackground: Color { Color(nsColor: .textBackgroundColor) }
+
     static var appBackground: Color {
         Color(nsColor: .windowBackgroundColor)
     }
