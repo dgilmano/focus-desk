@@ -232,97 +232,104 @@ struct MainDeskView: View {
                 .padding(.bottom, 8)
 
             VStack(alignment: .leading, spacing: 14) {
-                Text("Focus Desk")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 48)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Focus Desk")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 48)
 
-                FocusDeskSidebarSection(title: "Focus") {
-                    FocusDeskSidebarButton(
-                        title: "Desk",
-                        systemImage: "circle.dashed",
-                        isSelected: selectedSection == .desk,
-                        count: activeTasks.count,
-                        iconColor: .orange
-                    ) {
-                        selectedSection = .desk
-                        ensureValidSelection()
-                    }
-
-                    FocusDeskSidebarButton(
-                        title: "New Task",
-                        systemImage: "plus.square.on.square",
-                        isSelected: selectedSection == .newTask,
-                        iconColor: .blue
-                    ) {
-                        selectedSection = .newTask
-                    }
-                    .keyboardShortcut("n", modifiers: [.command])
-                }
-
-                FocusDeskSidebarSection(title: "Manage") {
-                    FocusDeskSidebarButton(
-                        title: "Tasks",
-                        systemImage: "tray.full",
-                        isSelected: selectedSection == .tasks,
-                        count: activeTasks.count,
-                        iconColor: .mint
-                    ) {
-                        selectedSection = .tasks
-                    }
-
-                    FocusDeskSidebarButton(
-                        title: "Completed",
-                        systemImage: "checkmark.circle",
-                        isSelected: selectedSection == .completed,
-                        count: completedTasks.count,
-                        iconColor: .green
-                    ) {
-                        selectedSection = .completed
-                    }
-
-                    FocusDeskSidebarButton(
-                        title: "Summary",
-                        systemImage: "chart.bar.xaxis",
-                        isSelected: selectedSection == .summary,
-                        count: journalEntriesTodayCount,
-                        iconColor: .purple
-                    ) {
-                        selectedSection = .summary
-                    }
-                }
-
-                FocusDeskSidebarSection(title: "Tags", isExpanded: $isTagsSidebarSectionExpanded) {
-                    if sidebarTagItems.isEmpty {
-                        SidebarEmptyLabel("No tags yet")
-                    } else {
-                        ForEach(sidebarTagItems) { item in
-                            let palette = TaskTagPalette.palette(for: item.tag.colorName)
-
-                            FocusDeskSidebarTagButton(
-                                title: item.tag.name,
-                                isSelected: selectedSection == .tag(item.normalizedName),
-                                count: item.activeTaskCount,
-                                dotColor: palette.background,
-                                dotBorderColor: palette.foreground
+                        FocusDeskSidebarSection(title: "Focus") {
+                            FocusDeskSidebarButton(
+                                title: "Desk",
+                                systemImage: "circle.dashed",
+                                isSelected: selectedSection == .desk,
+                                count: activeTasks.count,
+                                iconColor: .orange
                             ) {
-                                selectedSection = .tag(item.normalizedName)
+                                selectedSection = .desk
+                                ensureValidSelection()
+                            }
+
+                            FocusDeskSidebarButton(
+                                title: "New Task",
+                                systemImage: "plus.square.on.square",
+                                isSelected: selectedSection == .newTask,
+                                iconColor: .blue
+                            ) {
+                                selectedSection = .newTask
+                            }
+                            .keyboardShortcut("n", modifiers: [.command])
+                        }
+
+                        FocusDeskSidebarSection(title: "Manage") {
+                            FocusDeskSidebarButton(
+                                title: "Tasks",
+                                systemImage: "tray.full",
+                                isSelected: selectedSection == .tasks,
+                                count: activeTasks.count,
+                                iconColor: .mint
+                            ) {
+                                selectedSection = .tasks
+                            }
+
+                            FocusDeskSidebarButton(
+                                title: "Completed",
+                                systemImage: "checkmark.circle",
+                                isSelected: selectedSection == .completed,
+                                count: completedTasks.count,
+                                iconColor: .green
+                            ) {
+                                selectedSection = .completed
+                            }
+
+                            FocusDeskSidebarButton(
+                                title: "Summary",
+                                systemImage: "chart.bar.xaxis",
+                                isSelected: selectedSection == .summary,
+                                count: journalEntriesTodayCount,
+                                iconColor: .purple
+                            ) {
+                                selectedSection = .summary
                             }
                         }
 
-                        FocusDeskSidebarAllTagsButton(
-                            isSelected: selectedSection == .allTags,
-                            count: activeTaggedTasks.count
-                        ) {
-                            selectedSection = .allTags
+                        FocusDeskSidebarSection(title: "Tags", isExpanded: $isTagsSidebarSectionExpanded) {
+                            if sidebarTagItems.isEmpty {
+                                SidebarEmptyLabel("No tags yet")
+                            } else {
+                                ForEach(sidebarTagItems) { item in
+                                    let palette = TaskTagPalette.palette(for: item.tag.colorName)
+
+                                    FocusDeskSidebarTagButton(
+                                        title: item.tag.name,
+                                        isSelected: selectedSection == .tag(item.normalizedName),
+                                        count: item.activeTaskCount,
+                                        dotColor: palette.background,
+                                        dotBorderColor: palette.foreground
+                                    ) {
+                                        selectedSection = .tag(item.normalizedName)
+                                    }
+                                }
+
+                                FocusDeskSidebarAllTagsButton(
+                                    isSelected: selectedSection == .allTags,
+                                    count: activeTaggedTasks.count
+                                ) {
+                                    selectedSection = .allTags
+                                }
+                            }
                         }
+
                     }
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
 
-                Spacer(minLength: 12)
+                ActivityPaletteView()
+                    .padding(.horizontal, 4)
 
                 CloudAccountSidebarView(
                     displayName: googleAccountDisplayName,
@@ -377,6 +384,9 @@ struct MainDeskView: View {
                 .frame(maxWidth: .infinity)
 
                 Spacer(minLength: 12)
+
+                ActivityRailButton()
+                    .padding(.bottom, 12)
 
                 collapsedSidebarIconButton(
                     title: googleAccountDisplayName.isEmpty ? "Google Account" : googleAccountDisplayName,
@@ -831,23 +841,25 @@ struct MainDeskView: View {
             let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
 
             ScrollView {
-                SummaryWorkspaceView(
-                    tasks: tasks,
-                    activeTasks: activeTasks,
-                    completedTasks: completedTasks,
-                    now: Date(),
-                    onOpen: { task in
-                        select(task.id)
-                    },
-                    onCreate: {
-                        selectedSection = .newTask
-                    }
-                )
-                .frame(minWidth: contentWidth, maxWidth: .infinity, alignment: .topLeading)
-                .padding(.horizontal, workspaceHorizontalPadding)
-                .padding(.top, 34)
-                .padding(.bottom, 28)
-                .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .topLeading)
+                TimelineView(.periodic(from: .now, by: 30)) { timeline in
+                    SummaryWorkspaceView(
+                        tasks: tasks,
+                        activeTasks: activeTasks,
+                        completedTasks: completedTasks,
+                        now: timeline.date,
+                        onOpen: { task in
+                            select(task.id)
+                        },
+                        onCreate: {
+                            selectedSection = .newTask
+                        }
+                    )
+                    .frame(minWidth: contentWidth, maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, workspaceHorizontalPadding)
+                    .padding(.top, 34)
+                    .padding(.bottom, 28)
+                    .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .topLeading)
+                }
             }
         }
     }
@@ -1752,6 +1764,8 @@ private struct SummaryWorkspaceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            ActivityDayMapView(selectedDate: $selectedJournalDate, now: now)
+
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 170), spacing: 16)],
                 alignment: .leading,
@@ -1791,8 +1805,8 @@ private struct SummaryWorkspaceView: View {
             } else {
                 tagActivityPanel
                 needsAttentionPanel
-                journalPanel
             }
+            journalPanel
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -1990,15 +2004,13 @@ private struct SummaryWorkspaceView: View {
     }
 
     private var previousJournalDate: Date? {
-        metrics.journalDayStarts.last { $0 < selectedJournalDayStart }
+        Calendar.current.date(byAdding: .day, value: -1, to: selectedJournalDayStart)
     }
 
     private var nextJournalDate: Date? {
-        if let nextJournalDay = metrics.journalDayStarts.first(where: { $0 > selectedJournalDayStart && $0 <= todayStart }) {
-            return nextJournalDay
-        }
-
-        return canNavigateForward ? nil : selectedJournalDate
+        guard let date = Calendar.current.date(byAdding: .day, value: 1, to: selectedJournalDayStart),
+              date < todayStart else { return nil }
+        return date
     }
 
     private var canNavigateForward: Bool {

@@ -30,6 +30,11 @@ let package = Package(
             name: "FocusDeskCoreTests",
             dependencies: ["FocusDeskCore"],
             path: "Tests/FocusDeskCoreTests"
+        ),
+        .testTarget(
+            name: "FocusDeskAppTests",
+            dependencies: ["FocusDesk"],
+            path: "Tests/FocusDeskAppTests"
         )
     ]
 )

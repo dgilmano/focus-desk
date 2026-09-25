@@ -12,7 +12,9 @@ enum PersistenceController {
 
         let schema = Schema([
             FocusTask.self,
-            ProgressEntry.self
+            ProgressEntry.self,
+            ActivityCategory.self,
+            ActivityInterval.self
         ])
 
         let configuration = ModelConfiguration(

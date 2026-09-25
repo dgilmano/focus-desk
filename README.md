@@ -11,6 +11,18 @@ Focus Desk is a native SwiftUI macOS app for focusing on one long-running task a
 - Task Manager window with Active and Completed tabs.
 - Undoable completion toast with a five-second recovery window.
 - WidgetKit source target that reads a shared current-task snapshot.
+- Activity palette in the sidebar and macOS menu bar: one-click switching, explicit pause, and editable names, colors, and icons.
+- Summary Day Map with calendar navigation, time totals, editable intervals, gap filling, splitting, and optional task links. Its selected date also controls the Journal.
+
+## Activity
+
+Activity records local start/end timestamps independently of tasks and journal entries. Selecting the active category again is a no-op. Switching categories closes the previous interval and starts the next in one save. Category archival preserves historical intervals.
+
+Sleep and normal application quit pause recording. While running, the application saves a checkpoint every 30 seconds. Following an unexpected exit, the unfinished interval is closed at that checkpoint; time while the app was unavailable is left untracked. Activity does not infer computer usage or pause when the mouse is idle. Day boundaries use the current local calendar, including daylight-saving transitions.
+
+The existing tag chart remains an estimate from Journal entries; it is not combined with the measured Activity totals. Task links on activity intervals are optional and do not follow task navigation automatically.
+
+Debug builds support `swift run FocusDesk --activity-preview` for visual checks using an in-memory store, without modifying the task database. Release builds ignore this option.
 
 ## Build
 
