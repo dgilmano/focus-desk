@@ -69,6 +69,34 @@ final class ActivityTimelineTests: XCTestCase {
         }
     }
 
+    func testDailyBalanceMatchesJournalIntervalsWithoutCountingGapsAsRecorded() {
+        let day = calendar.startOfDay(for: origin)
+        let start = day.addingTimeInterval(9 * 3600)
+        let now = day.addingTimeInterval(16 * 3600)
+        let study = UUID(), life = UUID(), leisure = UUID(), other = UUID()
+        let pieces: [(UUID, Double, Double?)] = [
+            (work, 0, 110), (rest, 110, 130), (study, 130, 200),
+            (life, 200, 245), (leisure, 245, 275), (other, 275, 285),
+            (rest, 315, 330), (work, 330, nil)
+        ]
+        let intervals = pieces.map { category, from, to in
+            ActivityIntervalSnapshot(categoryID: category, start: start.addingTimeInterval(from * 60),
+                                     end: to.map { start.addingTimeInterval($0 * 60) })
+        }
+        let segments = ActivityTimeline.segments(on: day, intervals: intervals, now: now, calendar: calendar)
+        let totals = ActivityTimeline.totals(for: segments)
+        let expected: [UUID: TimeInterval] = [work: 12000, rest: 2100, study: 4200,
+                                              life: 2700, leisure: 1800, other: 600]
+        XCTAssertEqual(totals, expected)
+        let recorded = totals.values.reduce(0, +)
+        let untracked = segments.filter { $0.intervalID == nil }.reduce(0) { $0 + $1.duration }
+        XCTAssertEqual(recorded, 390 * 60)
+        XCTAssertEqual(untracked, (9 * 60 + 30) * 60)
+        XCTAssertEqual(recorded + untracked, now.timeIntervalSince(day))
+        XCTAssertEqual(segments.last?.intervalID, intervals.last?.id)
+        XCTAssertEqual(segments.last?.end, now)
+    }
+
     func testSplitPreservesDurationAndOnlySecondHalfCanRemainRunning() throws {
         let now = origin.addingTimeInterval(3600)
         for end in [now, nil] {

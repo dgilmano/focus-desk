@@ -709,6 +709,7 @@ struct MainDeskView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(selectedSection == .dayMap ? ActivityAppearance.canvas : FocusDeskStyle.appBackground)
     }
 
     private var detailToolbar: some View {
@@ -746,13 +747,21 @@ struct MainDeskView: View {
                         Text(toolbarTitle)
                             .font(.system(size: 26, weight: .semibold))
 
-                        Text(toolbarSubtitle)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        if selectedSection != .dayMap {
+                            Text(toolbarSubtitle)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
 
                     Spacer()
+
+                    if selectedSection == .dayMap {
+                        TimelineView(.periodic(from: .now, by: 30)) { context in
+                            ActivityDateControls(selectedDate: $selectedActivityDate, now: context.date)
+                        }
+                    }
 
                     if selectedSection != .newTask && selectedSection != .dayMap {
                         toolbarIconButton(

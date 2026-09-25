@@ -19,186 +19,88 @@ struct ActivityDayMapView: View {
     @State private var draft: ActivityIntervalDraft?
     @State private var showingSettings = false
     var now: Date
+    var availableWidth: CGFloat
 
-    private var day: Date { selectedDate ?? now }
+    // Store changes can arrive between TimelineView ticks (for example, a newly started activity).
+    private var liveNow: Date { max(now, Date()) }
+    private var day: Date { selectedDate ?? liveNow }
     private var dayRange: DateInterval { Calendar.current.dateInterval(of: .day, for: day)! }
-    private var segments: [ActivityDaySegment] {
-        ActivityTimeline.segments(on: day, intervals: store.snapshots, now: now)
-    }
-    private var totals: [UUID: TimeInterval] { ActivityTimeline.totals(for: segments) }
-    private var recordedCategories: [ActivityCategory] {
-        store.categories.filter { totals[$0.id] != nil }.sorted { totals[$0.id, default: 0] > totals[$1.id, default: 0] }
-    }
-    private var untracked: TimeInterval { segments.filter { $0.intervalID == nil }.reduce(0) { $0 + $1.duration } }
 
     var body: some View {
+        let segments = ActivityTimeline.segments(on: day, intervals: store.snapshots, now: liveNow)
+        let totals = ActivityTimeline.totals(for: segments)
         VStack(alignment: .leading, spacing: 16) {
-            ViewThatFits(in: .horizontal) {
-                HStack { heading; Spacer(); dateControls }
-                VStack(alignment: .leading, spacing: 8) { heading; dateControls }
-            }
-            timeline
-            if let notice = store.notice, Calendar.current.isDate(day, inSameDayAs: now) {
+            if let notice = store.notice, Calendar.current.isDate(day, inSameDayAs: liveNow) {
                 Text(notice).font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            if recordedCategories.isEmpty {
-                Text("No activity recorded for this day.").font(.system(size: 13)).foregroundStyle(.secondary)
+
+            if availableWidth >= 650 {
+                HStack(alignment: .top, spacing: 24) {
+                    timeline(segments)
+                        .frame(width: (availableWidth - 49) * 0.6)
+                    balance(segments, totals: totals)
+                        .padding(.leading, 24)
+                        .overlay(alignment: .leading) {
+                            Rectangle().fill(FocusDeskStyle.hairline).frame(width: 1)
+                        }
+                        .frame(maxWidth: .infinity)
+                }
             } else {
-                VStack(spacing: 10) {
-                    ForEach(recordedCategories) { category in
-                        totalRow(category)
-                    }
+                VStack(alignment: .leading, spacing: 24) {
+                    timeline(segments)
+                    Divider()
+                    balance(segments, totals: totals)
                 }
             }
-            HStack {
-                Text("Untracked").foregroundStyle(.secondary)
-                Spacer()
-                Text(ActivityTimeText.duration(untracked)).monospacedDigit().foregroundStyle(.secondary)
-            }
-            .font(.system(size: 12))
-            Divider()
-            HStack {
-                Text("Intervals").font(.system(size: 13))
-                Spacer()
-                ActivityIconButton(symbol: "plus", title: "Add interval") { addInterval() }
-                    .disabled(store.availableCategories.isEmpty || !segments.contains { $0.intervalID == nil })
-            }
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(segments) { segment in
-                        intervalRow(segment)
-                    }
-                }
-            }
-            .frame(height: min(240, CGFloat(segments.count) * 38))
+
             if let error = store.errorMessage {
-                Text(error).font(.caption).foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.vertical, 18)
         .sheet(item: $draft) { value in
             ActivityIntervalEditor(draft: value)
         }
         .sheet(isPresented: $showingSettings) { ActivityCategoriesView() }
     }
 
-    private var heading: some View {
-        Text("Timeline").font(.system(size: 16, weight: .medium))
-    }
-
-    private var dateControls: some View {
-        HStack(spacing: 4) {
-            ActivityIconButton(symbol: "chevron.left", title: "Previous day") { moveDay(-1) }
-            DatePicker("Day", selection: Binding(get: { day }, set: {
-                selectedDate = Calendar.current.isDate($0, inSameDayAs: now) ? nil : $0
-            }), in: ...now, displayedComponents: .date)
-                .labelsHidden().datePickerStyle(.field)
-            ActivityIconButton(symbol: "chevron.right", title: "Next day") { moveDay(1) }
-                .disabled(Calendar.current.isDate(day, inSameDayAs: now))
-            Button("Today") { selectedDate = nil }
-                .buttonStyle(.plain).font(.system(size: 12))
-                .disabled(Calendar.current.isDate(day, inSameDayAs: now))
-        }
-    }
-
-    private var timeline: some View {
-        VStack(spacing: 7) {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Rectangle().fill(FocusDeskStyle.focusSurface)
-                    ForEach(segments) { segment in
-                        let palette = TaskTagPalette.palette(for: store.category(segment.categoryID)?.colorName ?? "gray")
-                        Button { edit(segment) } label: {
-                            Rectangle()
-                                .fill(segment.intervalID == nil ? Color.secondary.opacity(0.12) : palette.background)
-                                .overlay(alignment: .trailing) { Rectangle().fill(Color.primary.opacity(0.12)).frame(width: 1) }
-                                .frame(width: max(0, geometry.size.width * segment.duration / dayRange.duration))
-                                .frame(height: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .offset(x: geometry.size.width * segment.start.timeIntervalSince(dayRange.start) / dayRange.duration)
-                        .help(segmentDescription(segment))
-                        .accessibilityLabel(segmentDescription(segment))
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 5))
-            }
-            .frame(height: 36)
-            GeometryReader { geometry in
-                ForEach([0, 6, 12, 18, 24], id: \.self) { hour in
-                    let date = hour == 24 ? dayRange.end : Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: dayRange.start)!
-                    Text(String(format: "%02d", hour))
-                        .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
-                        .position(x: max(8, min(geometry.size.width - 8, geometry.size.width * date.timeIntervalSince(dayRange.start) / dayRange.duration)), y: 6)
-                }
-            }
-            .frame(height: 14)
-        }
-    }
-
-    private func totalRow(_ category: ActivityCategory) -> some View {
-        let palette = TaskTagPalette.palette(for: category.colorName)
-        let duration = totals[category.id, default: 0]
-        let recorded = max(1, totals.values.reduce(0, +))
-        return VStack(spacing: 5) {
-            HStack(spacing: 8) {
-                Image(systemName: category.symbol).foregroundStyle(palette.foreground).frame(width: 16)
-                Text(category.name).lineLimit(1)
+    private func timeline(_ segments: [ActivityDaySegment]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Day timeline").font(.system(size: 17, weight: .semibold))
                 Spacer()
-                Text(ActivityTimeText.duration(duration)).monospacedDigit()
+                ActivityIconButton(symbol: "plus", title: "Add interval") { addInterval(segments) }
+                    .disabled(store.availableCategories.isEmpty || !segments.contains { $0.intervalID == nil })
             }
-            .font(.system(size: 12))
-            GeometryReader { proxy in
-                RoundedRectangle(cornerRadius: 2).fill(palette.background)
-                    .frame(width: proxy.size.width * duration / recorded)
-            }
-            .frame(height: 4)
-            .accessibilityHidden(true)
-        }
-    }
+            .frame(height: 28)
 
-    private func intervalRow(_ segment: ActivityDaySegment) -> some View {
-        let category = store.category(segment.categoryID)
-        let palette = TaskTagPalette.palette(for: category?.colorName ?? "gray")
-        return Button { edit(segment) } label: {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 2).fill(palette.background).frame(width: 9, height: 18)
-                Text("\(timeLabel(segment.start)) - \(timeLabel(segment.end))")
-                    .monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .frame(minWidth: 118, alignment: .leading)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(category?.name ?? "Untracked").lineLimit(1)
-                    if let id = segment.intervalID, let title = store.interval(id)?.taskTitle {
-                        Text(title).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-                    }
+            if !segments.contains(where: { $0.intervalID != nil }) {
+                Text("No activity recorded for this day.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            }
+
+            LazyVStack(spacing: 0) {
+                ForEach(segments) { segment in
+                    let record = segment.intervalID.flatMap { store.interval($0) }
+                    let isActive = record != nil && record?.endedAt == nil && Calendar.current.isDate(day, inSameDayAs: liveNow)
+                    ActivityTimelineRow(
+                        segment: segment, category: store.category(segment.categoryID),
+                        taskTitle: record?.taskTitle, isActive: isActive,
+                        isFirst: segment.id == segments.first?.id,
+                        isLast: segment.id == segments.last?.id, dayEnd: dayRange.end,
+                        showsInlineRange: availableWidth >= 850
+                    ) { edit(segment) }
                 }
-                Spacer(minLength: 4)
-                Text(ActivityTimeText.duration(segment.duration)).foregroundStyle(.secondary).monospacedDigit()
-                Image(systemName: segment.intervalID == nil ? "plus" : "pencil").foregroundStyle(.secondary).frame(width: 20)
             }
-            .font(.system(size: 12))
-            .frame(height: 38)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help(segment.intervalID == nil ? "Fill untracked time" : "Edit interval")
     }
 
-    private func segmentDescription(_ segment: ActivityDaySegment) -> String {
-        "\(store.category(segment.categoryID)?.name ?? "Untracked"), \(timeLabel(segment.start)) to \(timeLabel(segment.end)), \(ActivityTimeText.duration(segment.duration))"
+    private func balance(_ segments: [ActivityDaySegment], totals: [UUID: TimeInterval]) -> some View {
+        ActivityDayBalanceView(categories: store.categories, segments: segments, totals: totals,
+                               dayEnd: dayRange.end, onSelectInterval: edit)
     }
 
-    private func timeLabel(_ date: Date) -> String {
-        date == dayRange.end ? "24:00" : date.formatted(date: .omitted, time: .shortened)
-    }
-
-    private func moveDay(_ offset: Int) {
-        guard let date = Calendar.current.date(byAdding: .day, value: offset, to: day) else { return }
-        selectedDate = Calendar.current.isDate(date, inSameDayAs: now) ? nil : date
-    }
-
-    private func addInterval() {
+    private func addInterval(_ segments: [ActivityDaySegment]) {
         guard let gap = segments.last(where: { $0.intervalID == nil }) else { return }
         edit(gap)
     }
@@ -206,7 +108,7 @@ struct ActivityDayMapView: View {
     private func edit(_ segment: ActivityDaySegment) {
         if let id = segment.intervalID, let record = store.interval(id) {
             draft = .init(intervalID: id, categoryID: record.categoryID, start: record.startedAt,
-                          end: record.endedAt ?? now, isRunning: record.endedAt == nil,
+                          end: record.endedAt ?? liveNow, isRunning: record.endedAt == nil,
                           taskID: record.taskID, taskTitle: record.taskTitle)
         } else if let category = store.availableCategories.first {
             draft = .init(categoryID: category.id, start: segment.start, end: segment.end)

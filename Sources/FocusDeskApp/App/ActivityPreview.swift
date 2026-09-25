@@ -14,16 +14,28 @@ enum ActivityPreview {
         context.insert(ProgressEntry(note: "Reviewed the weekly plan.", timestamp: Date().addingTimeInterval(-3600), task: task))
         try? context.save()
         let now = Date()
-        let start = max(Calendar.current.startOfDay(for: now), now.addingTimeInterval(-8 * 3600))
-        let available = now.timeIntervalSince(start)
-        let pieces: [(Int, Double, Double)] = [(0, 0, 0.28), (3, 0.28, 0.35), (1, 0.4, 0.65), (0, 0.65, 0.9)]
-        for (index, from, to) in pieces {
-            _ = store.saveInterval(id: nil, categoryID: store.categories[index].id,
-                                   start: start.addingTimeInterval(available * from),
-                                   end: start.addingTimeInterval(available * to),
-                                   taskID: index == 0 ? task.id : nil, taskTitle: index == 0 ? task.title : nil)
+        for (name, color, symbol) in [("Work", "mint", "briefcase"), ("Study", "blue", "book"),
+                                       ("Rest", "green", "leaf"), ("Leisure", "pink", "gamecontroller")] {
+            _ = store.saveCategory(id: store.categories.first { $0.name == name }?.id,
+                                   name: name, color: color, symbol: symbol)
         }
-        store.start(store.categories[0].id, at: start.addingTimeInterval(available * 0.9))
+        let start = max(Calendar.current.startOfDay(for: now), now.addingTimeInterval(-7 * 3600))
+        let available = now.timeIntervalSince(start)
+        let pieces: [(String, Double, Double)] = [
+            ("Work", 0, 110), ("Rest", 110, 130), ("Study", 130, 200),
+            ("Life", 200, 245), ("Leisure", 245, 275), ("Other", 275, 285), ("Rest", 315, 330)
+        ]
+        for (name, from, to) in pieces {
+            guard let category = store.categories.first(where: { $0.name == name }) else { continue }
+            _ = store.saveInterval(id: nil, categoryID: category.id,
+                                   start: start.addingTimeInterval(available * from / 420),
+                                   end: start.addingTimeInterval(available * to / 420),
+                                   taskID: name == "Work" ? task.id : nil,
+                                   taskTitle: name == "Work" ? task.title : nil)
+        }
+        if let work = store.categories.first(where: { $0.name == "Work" }) {
+            store.start(work.id, at: start.addingTimeInterval(available * 330 / 420))
+        }
     }
 }
 #endif

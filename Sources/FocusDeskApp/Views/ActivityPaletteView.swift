@@ -22,9 +22,27 @@ struct ActivityIconButton: View {
 struct ActivityPaletteView: View {
     @Environment(ActivityStore.self) private var store
     @State private var showingSettings = false
+    @State private var addingCategory = false
     var compact = false
+    var availableWidth: CGFloat = 650
+
+    private var workspaceColumns: [GridItem] {
+        let count = max(1, min(store.availableCategories.count, Int(max(104, availableWidth - 80) / 112)))
+        return Array(repeating: GridItem(.flexible(minimum: 0), spacing: 8), count: count)
+    }
 
     var body: some View {
+        Group {
+            if compact {
+                compactPalette
+            } else {
+                workspacePalette
+            }
+        }
+        .sheet(isPresented: $showingSettings) { ActivityCategoriesView(focusNewActivity: addingCategory) }
+    }
+
+    private var compactPalette: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
                 Text(compact ? "Activity" : "Activities")
@@ -64,7 +82,108 @@ struct ActivityPaletteView: View {
                 Text(error).font(.system(size: 11)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .sheet(isPresented: $showingSettings) { ActivityCategoriesView() }
+    }
+
+    private var workspacePalette: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(ActivityAppearance.accent(store.activeCategory?.colorName ?? "gray"))
+                    .frame(width: 11, height: 11)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { currentName; currentStart }
+                    VStack(alignment: .leading, spacing: 3) { currentName; currentStart }
+                }
+                Spacer(minLength: 8)
+                ActivityIconButton(symbol: "pause.fill", title: "Pause activity") { store.pause() }
+                    .padding(3)
+                    .background(FocusDeskStyle.focusSurface, in: Circle())
+                    .disabled(store.activeInterval == nil)
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                if store.availableCategories.isEmpty {
+                    Text("No activities").font(.system(size: 13)).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+                } else {
+                    LazyVGrid(columns: workspaceColumns, spacing: 8) {
+                        ForEach(store.availableCategories) { category in
+                            workspaceActivityButton(category)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .layoutPriority(1)
+                }
+                paletteAction(symbol: "plus", title: "Add activity") {
+                    addingCategory = true
+                    showingSettings = true
+                }
+                paletteAction(symbol: "gearshape", title: "Manage activities") {
+                    addingCategory = false
+                    showingSettings = true
+                }
+            }
+        }
+    }
+
+    private var currentName: some View {
+        Text(store.activeCategory?.name ?? "Not tracking")
+            .font(.system(size: 16, weight: .semibold))
+            .lineLimit(1)
+            .help(store.activeCategory?.name ?? "Not tracking")
+    }
+
+    @ViewBuilder private var currentStart: some View {
+        if let interval = store.activeInterval {
+            Text("Since \(interval.startedAt.formatted(date: .omitted, time: .shortened))")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize()
+        }
+    }
+
+    private func workspaceActivityButton(_ category: ActivityCategory) -> some View {
+        let accent = ActivityAppearance.accent(category.colorName)
+        let selected = store.activeCategory?.id == category.id
+        return Button { store.start(category.id) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: category.symbol)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(accent)
+                    .frame(width: 30, height: 30)
+                    .background(accent.opacity(0.08), in: Circle())
+                Text(category.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 58)
+            .background(accent.opacity(selected ? 0.08 : 0.035), in: RoundedRectangle(cornerRadius: 6))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(selected ? accent : FocusDeskStyle.hairline, lineWidth: selected ? 1.5 : 0.7)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help(category.name)
+        .accessibilityLabel(category.name)
+        .accessibilityValue(selected ? "Active" : "Inactive")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func paletteAction(symbol: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 16))
+                .frame(width: 36, height: 58)
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(FocusDeskStyle.hairline, lineWidth: 0.7) }
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
     }
 
     private var activityGrid: some View {
@@ -151,6 +270,8 @@ struct ActivityCategoriesView: View {
     @State private var name = ""
     @State private var color = "blue"
     @State private var symbol = "briefcase"
+    @FocusState private var nameFocused: Bool
+    var focusNewActivity = false
     private let symbols = ["briefcase", "book", "house", "cup.and.saucer", "figure.walk", "music.note", "phone", "moon", "gamecontroller", "ellipsis"]
 
     var body: some View {
@@ -196,7 +317,9 @@ struct ActivityCategoriesView: View {
                     ActivityIconButton(symbol: "plus", title: "New activity") { editingID = nil; name = "" }
                 }
             }
-            TextField("Activity name", text: $name).textFieldStyle(.roundedBorder)
+            TextField("Activity name", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .focused($nameFocused)
             HStack(spacing: 8) {
                 ForEach(TaskTagPalette.allCases) { palette in
                     Button { color = palette.rawValue } label: {
@@ -233,10 +356,15 @@ struct ActivityCategoriesView: View {
         .font(.system(size: 12))
         .padding(20)
         .frame(width: 390)
+        .onAppear { nameFocused = focusNewActivity }
     }
 }
 
 enum ActivityTimeText {
+    static func clock(_ date: Date, dayEnd: Date) -> String {
+        date == dayEnd ? "24:00" : date.formatted(date: .omitted, time: .shortened)
+    }
+
     static func duration(_ seconds: TimeInterval) -> String {
         let minutes = Int(max(0, seconds) / 60)
         if minutes == 0 { return seconds > 0 ? "<1 min" : "0 min" }
