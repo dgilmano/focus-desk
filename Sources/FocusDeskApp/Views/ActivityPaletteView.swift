@@ -27,35 +27,36 @@ struct ActivityPaletteView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
-                Text("Activity")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(FocusDeskStyle.sectionHeadingForeground)
+                Text(compact ? "Activity" : "Activities")
+                    .font(.system(size: compact ? 11 : 13, weight: compact ? .semibold : .regular))
+                    .foregroundStyle(compact ? FocusDeskStyle.sectionHeadingForeground : .primary)
                 Spacer(minLength: 0)
                 ActivityIconButton(symbol: "pause", title: "Pause activity") { store.pause() }
                     .disabled(store.activeInterval == nil)
                 ActivityIconButton(symbol: "slider.horizontal.3", title: "Manage activities") { showingSettings = true }
             }
 
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 82 : 64), spacing: 6)], spacing: 6) {
-                    ForEach(store.availableCategories) { category in
-                        activityButton(category)
-                    }
+            if store.availableCategories.isEmpty {
+                Text("No activities").font(.system(size: 12)).foregroundStyle(.secondary)
+            } else if compact {
+                ScrollView {
+                    activityGrid
                 }
-                .padding(2)
+                .scrollIndicators(.hidden)
+                .frame(height: 124)
+            } else {
+                activityGrid
             }
-            .scrollIndicators(.hidden)
-            .frame(height: compact ? 124 : 114)
 
             if let current = store.activeCategory, let interval = store.activeInterval {
                 Text("\(current.name) since \(interval.startedAt.formatted(date: .omitted, time: .shortened))")
-                    .font(.system(size: 11))
+                    .font(.system(size: compact ? 11 : 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .help(current.name)
             } else {
                 Text("Not tracking")
-                    .font(.system(size: 11))
+                    .font(.system(size: compact ? 11 : 12))
                     .foregroundStyle(.secondary)
             }
 
@@ -66,24 +67,33 @@ struct ActivityPaletteView: View {
         .sheet(isPresented: $showingSettings) { ActivityCategoriesView() }
     }
 
+    private var activityGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 82 : 150), spacing: 8)], spacing: 8) {
+            ForEach(store.availableCategories) { category in
+                activityButton(category)
+            }
+        }
+        .padding(2)
+    }
+
     private func activityButton(_ category: ActivityCategory) -> some View {
         let palette = TaskTagPalette.palette(for: category.colorName)
         let selected = store.activeCategory?.id == category.id
         return Button { store.start(category.id) } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: compact ? 4 : 8) {
                 Image(systemName: selected ? "checkmark" : category.symbol)
-                    .font(.system(size: 10))
-                    .frame(width: 12)
+                    .font(.system(size: compact ? 10 : 12))
+                    .frame(width: compact ? 12 : 16)
                 Text(category.name)
-                    .font(.system(size: 11))
+                    .font(.system(size: compact ? 11 : 12))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
             }
             .foregroundStyle(palette.foreground)
-            .padding(.horizontal, 7)
+            .padding(.horizontal, compact ? 7 : 12)
             .frame(maxWidth: .infinity)
-            .frame(height: 32)
+            .frame(height: compact ? 32 : 40)
             .background(palette.background, in: RoundedRectangle(cornerRadius: 6))
             .overlay {
                 RoundedRectangle(cornerRadius: 6)
@@ -95,28 +105,6 @@ struct ActivityPaletteView: View {
         .help(category.name)
         .accessibilityLabel(category.name)
         .accessibilityValue(selected ? "Active" : "Inactive")
-    }
-}
-
-struct ActivityRailButton: View {
-    @Environment(ActivityStore.self) private var store
-    @State private var showingPalette = false
-
-    var body: some View {
-        Button { showingPalette.toggle() } label: {
-            Image(systemName: store.activeCategory?.symbol ?? "square.grid.2x2")
-                .font(.system(size: 14))
-                .foregroundStyle(TaskTagPalette.palette(for: store.activeCategory?.colorName ?? "gray").foreground)
-                .frame(width: 32, height: 32)
-                .background(TaskTagPalette.palette(for: store.activeCategory?.colorName ?? "gray").background,
-                            in: RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .help(store.activeCategory.map { "Activity: \($0.name)" } ?? "Choose activity")
-        .accessibilityLabel("Activity")
-        .popover(isPresented: $showingPalette, arrowEdge: .trailing) {
-            ActivityPaletteView(compact: true).padding(16).frame(width: 270)
-        }
     }
 }
 

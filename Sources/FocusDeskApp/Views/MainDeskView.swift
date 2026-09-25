@@ -5,6 +5,7 @@ import SwiftData
 import SwiftUI
 
 private enum MainSection: Equatable {
+    case dayMap
     case desk
     case newTask
     case tasks
@@ -26,6 +27,7 @@ private struct SidebarTagItem: Identifiable {
 
 struct MainDeskView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(ActivityStore.self) private var activityStore
 
     @Query(sort: \FocusTask.sortOrder, order: .forward)
     private var tasks: [FocusTask]
@@ -34,6 +36,7 @@ struct MainDeskView: View {
     private var currentTaskIDRaw = ""
 
     @State private var selectedSection: MainSection = .desk
+    @State private var selectedActivityDate: Date?
     @State private var completionToast: CompletionToast?
     @State private var toastDismissalTask: Task<Void, Never>?
     @State private var isSavingStep = false
@@ -244,6 +247,15 @@ struct MainDeskView: View {
 
                         FocusDeskSidebarSection(title: "Focus") {
                             FocusDeskSidebarButton(
+                                title: "Day map",
+                                systemImage: "rectangle.split.3x1",
+                                isSelected: selectedSection == .dayMap,
+                                iconColor: .teal
+                            ) {
+                                selectedSection = .dayMap
+                            }
+
+                            FocusDeskSidebarButton(
                                 title: "Desk",
                                 systemImage: "circle.dashed",
                                 isSelected: selectedSection == .desk,
@@ -253,7 +265,9 @@ struct MainDeskView: View {
                                 selectedSection = .desk
                                 ensureValidSelection()
                             }
+                        }
 
+                        FocusDeskSidebarSection(title: "Manage") {
                             FocusDeskSidebarButton(
                                 title: "New Task",
                                 systemImage: "plus.square.on.square",
@@ -263,9 +277,7 @@ struct MainDeskView: View {
                                 selectedSection = .newTask
                             }
                             .keyboardShortcut("n", modifiers: [.command])
-                        }
 
-                        FocusDeskSidebarSection(title: "Manage") {
                             FocusDeskSidebarButton(
                                 title: "Tasks",
                                 systemImage: "tray.full",
@@ -328,9 +340,6 @@ struct MainDeskView: View {
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
 
-                ActivityPaletteView()
-                    .padding(.horizontal, 4)
-
                 CloudAccountSidebarView(
                     displayName: googleAccountDisplayName,
                     email: googleAccountEmail,
@@ -385,9 +394,6 @@ struct MainDeskView: View {
 
                 Spacer(minLength: 12)
 
-                ActivityRailButton()
-                    .padding(.bottom, 12)
-
                 collapsedSidebarIconButton(
                     title: googleAccountDisplayName.isEmpty ? "Google Account" : googleAccountDisplayName,
                     systemImage: googleOAuthClientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "person.crop.circle" : "person.crop.circle.fill",
@@ -409,6 +415,15 @@ struct MainDeskView: View {
     private var collapsedSidebarNavigation: some View {
         VStack(spacing: 8) {
             collapsedSidebarIconButton(
+                title: "Day map",
+                systemImage: "rectangle.split.3x1",
+                isSelected: selectedSection == .dayMap,
+                iconColor: .teal
+            ) {
+                selectedSection = .dayMap
+            }
+
+            collapsedSidebarIconButton(
                 title: "Desk",
                 systemImage: "circle.dashed",
                 isSelected: selectedSection == .desk,
@@ -417,6 +432,11 @@ struct MainDeskView: View {
                 selectedSection = .desk
                 ensureValidSelection()
             }
+
+            Rectangle()
+                .fill(FocusDeskStyle.hairline)
+                .frame(width: 24, height: 1)
+                .padding(.vertical, 4)
 
             collapsedSidebarIconButton(
                 title: "New Task",
@@ -656,6 +676,9 @@ struct MainDeskView: View {
 
             Group {
                 switch selectedSection {
+                case .dayMap:
+                    ActivityWorkspaceView(selectedDate: $selectedActivityDate)
+                        .transition(.opacity)
                 case .desk:
                     if let task = currentTask {
                         taskWorkspace(task)
@@ -726,11 +749,12 @@ struct MainDeskView: View {
                         Text(toolbarSubtitle)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
 
                     Spacer()
 
-                    if selectedSection != .newTask {
+                    if selectedSection != .newTask && selectedSection != .dayMap {
                         toolbarIconButton(
                             systemName: "plus",
                             help: "New Task"
@@ -780,6 +804,8 @@ struct MainDeskView: View {
 
     private var toolbarTitle: String {
         switch selectedSection {
+        case .dayMap:
+            return "Day map"
         case .desk:
             return "Desk"
         case .newTask:
@@ -799,6 +825,8 @@ struct MainDeskView: View {
 
     private var toolbarSubtitle: String {
         switch selectedSection {
+        case .dayMap:
+            return activityStore.activeCategory.map { "Current activity: \($0.name)" } ?? "Not tracking"
         case .newTask:
             return "Create a focused task"
         case .tasks:
@@ -847,6 +875,7 @@ struct MainDeskView: View {
                         activeTasks: activeTasks,
                         completedTasks: completedTasks,
                         now: timeline.date,
+                        selectedJournalDate: $selectedActivityDate,
                         onOpen: { task in
                             select(task.id)
                         },
@@ -1743,10 +1772,9 @@ private struct SummaryWorkspaceView: View {
     var activeTasks: [FocusTask]
     var completedTasks: [FocusTask]
     var now: Date
+    @Binding var selectedJournalDate: Date?
     var onOpen: (FocusTask) -> Void
     var onCreate: () -> Void
-
-    @State private var selectedJournalDate: Date?
 
     private var metrics: LocalSummaryMetrics {
         LocalSummaryMetrics(
@@ -1764,8 +1792,6 @@ private struct SummaryWorkspaceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ActivityDayMapView(selectedDate: $selectedJournalDate, now: now)
-
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 170), spacing: 16)],
                 alignment: .leading,

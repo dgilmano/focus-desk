@@ -83,10 +83,7 @@ struct ActivityDayMapView: View {
     }
 
     private var heading: some View {
-        HStack(spacing: 8) {
-            Text("Day Map").font(.system(size: 16, weight: .medium))
-            ActivityIconButton(symbol: "slider.horizontal.3", title: "Manage activities") { showingSettings = true }
-        }
+        Text("Timeline").font(.system(size: 16, weight: .medium))
     }
 
     private var dateControls: some View {

@@ -11,8 +11,9 @@ Focus Desk is a native SwiftUI macOS app for focusing on one long-running task a
 - Task Manager window with Active and Completed tabs.
 - Undoable completion toast with a five-second recovery window.
 - WidgetKit source target that reads a shared current-task snapshot.
-- Activity palette in the sidebar and macOS menu bar: one-click switching, explicit pause, and editable names, colors, and icons.
-- Summary Day Map with calendar navigation, time totals, editable intervals, gap filling, splitting, and optional task links. Its selected date also controls the Journal.
+- Dedicated Day map page under Focus with an adaptive activity palette: one-click switching, explicit pause, and editable names, colors, and icons. A compact palette is also available in the macOS menu bar.
+- Day map includes calendar navigation, time totals, editable intervals, gap filling, splitting, and optional task links. Its selected date is shared with the Journal in Summary.
+- Sidebar navigation: Focus (Day map, Desk), Manage (New Task, Tasks, Completed, Summary), and Tags.
 
 ## Activity
 
