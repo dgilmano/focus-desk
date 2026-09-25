@@ -247,15 +247,6 @@ struct MainDeskView: View {
 
                         FocusDeskSidebarSection(title: "Focus") {
                             FocusDeskSidebarButton(
-                                title: "Day map",
-                                systemImage: "rectangle.split.3x1",
-                                isSelected: selectedSection == .dayMap,
-                                iconColor: .teal
-                            ) {
-                                selectedSection = .dayMap
-                            }
-
-                            FocusDeskSidebarButton(
                                 title: "Desk",
                                 systemImage: "circle.dashed",
                                 isSelected: selectedSection == .desk,
@@ -264,6 +255,15 @@ struct MainDeskView: View {
                             ) {
                                 selectedSection = .desk
                                 ensureValidSelection()
+                            }
+
+                            FocusDeskSidebarButton(
+                                title: "Day map",
+                                systemImage: "rectangle.split.3x1",
+                                isSelected: selectedSection == .dayMap,
+                                iconColor: .teal
+                            ) {
+                                selectedSection = .dayMap
                             }
                         }
 
@@ -415,15 +415,6 @@ struct MainDeskView: View {
     private var collapsedSidebarNavigation: some View {
         VStack(spacing: 8) {
             collapsedSidebarIconButton(
-                title: "Day map",
-                systemImage: "rectangle.split.3x1",
-                isSelected: selectedSection == .dayMap,
-                iconColor: .teal
-            ) {
-                selectedSection = .dayMap
-            }
-
-            collapsedSidebarIconButton(
                 title: "Desk",
                 systemImage: "circle.dashed",
                 isSelected: selectedSection == .desk,
@@ -431,6 +422,15 @@ struct MainDeskView: View {
             ) {
                 selectedSection = .desk
                 ensureValidSelection()
+            }
+
+            collapsedSidebarIconButton(
+                title: "Day map",
+                systemImage: "rectangle.split.3x1",
+                isSelected: selectedSection == .dayMap,
+                iconColor: .teal
+            ) {
+                selectedSection = .dayMap
             }
 
             Rectangle()
