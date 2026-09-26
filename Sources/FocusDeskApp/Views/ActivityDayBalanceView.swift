@@ -4,10 +4,33 @@ import SwiftUI
 
 struct ActivityDayBalanceView: View {
     var categories: [ActivityCategory]
-    var segments: [ActivityDaySegment]
-    var totals: [UUID: TimeInterval]
-    var dayEnd: Date
+    var intervals: [ActivityIntervalSnapshot]
+    @Binding var selectedDate: Date?
+    var now: Date
     var onSelectInterval: (ActivityDaySegment) -> Void
+    @AppStorage("dayMapBalancePeriod") private var period: ActivityBalancePeriod = .day
+
+    private var day: Date { selectedDate ?? now }
+    private var range: DateInterval {
+        period.range(containing: day) ?? DateInterval(start: day, duration: 0)
+    }
+    private var segments: [ActivityDaySegment] {
+        ActivityTimeline.segments(in: range, intervals: intervals, now: now)
+    }
+    private var totals: [UUID: TimeInterval] { ActivityTimeline.totals(for: segments) }
+    private var dayEnd: Date { range.end }
+    private var title: String {
+        switch period {
+        case .day: "Daily balance"
+        case .week: "Weekly balance"
+        case .month: "Monthly balance"
+        }
+    }
+    private var periodDescription: String {
+        if period == .month { return day.formatted(.dateTime.month(.wide).year()) }
+        let lastDay = Calendar.current.date(byAdding: .day, value: -1, to: range.end) ?? range.start
+        return "\(range.start.formatted(.dateTime.day().month(.abbreviated).year())) – \(lastDay.formatted(.dateTime.day().month(.abbreviated).year()))"
+    }
 
     private var recordedCategories: [ActivityCategory] { categories.filter { totals[$0.id, default: 0] > 0 } }
     private var recorded: TimeInterval { totals.values.reduce(0, +) }
@@ -17,9 +40,32 @@ struct ActivityDayBalanceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Daily balance")
+            Text(title)
                 .font(.system(size: 17, weight: .semibold))
                 .frame(height: 28)
+            Picker("Balance period", selection: $period) {
+                Text("Day").tag(ActivityBalancePeriod.day)
+                Text("Week").tag(ActivityBalancePeriod.week)
+                Text("Month").tag(ActivityBalancePeriod.month)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            if period != .day {
+                HStack(spacing: 4) {
+                    ActivityIconButton(symbol: "chevron.left", title: "Previous \(period.rawValue)") { movePeriod(-1) }
+                    Text(periodDescription)
+                        .font(.system(size: 12))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ActivityIconButton(symbol: "chevron.right", title: "Next \(period.rawValue)") { movePeriod(1) }
+                        .disabled(range.end > now)
+                }
+                if range.end > now {
+                    Text("So far · through now")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
             donut
                 .frame(maxWidth: .infinity)
             VStack(spacing: 14) {
@@ -44,8 +90,14 @@ struct ActivityDayBalanceView: View {
             }
             .font(.system(size: 12))
             .accessibilityElement(children: .combine)
-            dayStrip
+            if period == .day { dayStrip }
         }
+    }
+
+    private func movePeriod(_ offset: Int) {
+        guard let date = Calendar.current.date(byAdding: period.calendarComponent, value: offset, to: day) else { return }
+        let destination = min(date, now)
+        selectedDate = Calendar.current.isDate(destination, inSameDayAs: now) ? nil : destination
     }
 
     private var donut: some View {

@@ -16,6 +16,7 @@ Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds a
 - Dedicated Day map page under Focus with an adaptive activity palette: one-click switching, explicit pause, and editable names, colors, and icons. A compact palette is also available in the macOS menu bar.
 - Day map includes calendar navigation, time totals, editable intervals, gap filling, splitting, and optional task links. Its selected date is shared with the Journal in Summary.
 - Day map pairs a chronological activity journal with a native daily-balance ring and a color timeline. The layout stacks on narrow windows; category colors, archived history, and untracked gaps stay consistent across views.
+- Balance switches between Day, Week, and Month, with category totals and recorded/untracked time for the selected calendar period. Weekly and monthly views include period navigation; current periods count only elapsed time. Week boundaries follow the system calendar, and the selected date remains shared with the daily timeline and Journal.
 - Sidebar navigation: Focus (Desk, Day map), Manage (New Task, Tasks, Completed, Summary), and Tags.
 
 ## Activity

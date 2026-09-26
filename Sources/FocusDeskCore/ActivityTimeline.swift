@@ -39,6 +39,22 @@ public struct ActivityDaySegment: Identifiable, Equatable, Sendable {
     public var duration: TimeInterval { end.timeIntervalSince(start) }
 }
 
+public enum ActivityBalancePeriod: String, CaseIterable, Sendable {
+    case day, week, month
+
+    public var calendarComponent: Calendar.Component {
+        switch self {
+        case .day: .day
+        case .week: .weekOfYear
+        case .month: .month
+        }
+    }
+
+    public func range(containing date: Date, calendar: Calendar = .current) -> DateInterval? {
+        calendar.dateInterval(of: calendarComponent, for: date)
+    }
+}
+
 public enum ActivityTimeline {
     public static func validate(
         _ candidate: ActivityIntervalSnapshot,
@@ -77,10 +93,17 @@ public enum ActivityTimeline {
         calendar: Calendar = .current
     ) -> [ActivityDaySegment] {
         guard let dayRange = calendar.dateInterval(of: .day, for: day) else { return [] }
-        let end = min(dayRange.end, now)
-        guard end > dayRange.start else { return [] }
+        return segments(in: dayRange, intervals: intervals, now: now)
+    }
+
+    // Clip to the selected calendar period and exclude time that has not elapsed yet.
+    public static func segments(
+        in range: DateInterval, intervals: [ActivityIntervalSnapshot], now: Date
+    ) -> [ActivityDaySegment] {
+        let end = min(range.end, now)
+        guard end > range.start else { return [] }
         var result: [ActivityDaySegment] = []
-        var cursor = dayRange.start
+        var cursor = range.start
         for interval in intervals.sorted(by: { $0.start < $1.start }) {
             let start = max(cursor, interval.start)
             let finish = min(end, interval.end ?? now)

@@ -32,7 +32,6 @@ struct ActivityDayMapView: View {
 
     var body: some View {
         let segments = ActivityTimeline.segments(on: day, intervals: store.snapshots, now: liveNow)
-        let totals = ActivityTimeline.totals(for: segments)
         let layout = ActivityDayMapSplitLayout(availableWidth: availableWidth, proportion: timelineProportion)
         VStack(alignment: .leading, spacing: 16) {
             if let notice = store.notice, Calendar.current.isDate(day, inSameDayAs: liveNow) {
@@ -43,7 +42,7 @@ struct ActivityDayMapView: View {
                 HStack(alignment: .top, spacing: ActivityDayMapSplitLayout.gutter) {
                     timeline(segments, width: layout.timelineWidth)
                         .frame(width: layout.timelineWidth)
-                    balance(segments, totals: totals)
+                    balance
                         .frame(width: layout.balanceWidth)
                 }
                 .overlay(alignment: .leading) {
@@ -54,7 +53,7 @@ struct ActivityDayMapView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     timeline(segments, width: availableWidth)
                     Divider()
-                    balance(segments, totals: totals)
+                    balance
                 }
             }
 
@@ -147,9 +146,9 @@ struct ActivityDayMapView: View {
         }
     }
 
-    private func balance(_ segments: [ActivityDaySegment], totals: [UUID: TimeInterval]) -> some View {
-        ActivityDayBalanceView(categories: store.categories, segments: segments, totals: totals,
-                               dayEnd: dayRange.end, onSelectInterval: edit)
+    private var balance: some View {
+        ActivityDayBalanceView(categories: store.categories, intervals: store.snapshots,
+                               selectedDate: $selectedDate, now: liveNow, onSelectInterval: edit)
     }
 
     private func addInterval(_ segments: [ActivityDaySegment]) {

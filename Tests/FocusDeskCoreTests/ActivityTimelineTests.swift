@@ -112,4 +112,60 @@ final class ActivityTimelineTests: XCTestCase {
             XCTAssertThrowsError(try ActivityTimeline.split(source, at: now, now: now))
         }
     }
+
+    func testWeeklyBalanceClipsBothBoundariesAndCombinesCategories() throws {
+        var calendar = self.calendar
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
+        let date = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let range = try XCTUnwrap(ActivityBalancePeriod.week.range(containing: date, calendar: calendar))
+        XCTAssertEqual(range.start, calendar.date(from: DateComponents(year: 2025, month: 12, day: 29)))
+        let intervals = [
+            ActivityIntervalSnapshot(categoryID: work, start: range.start.addingTimeInterval(-3600), end: range.start.addingTimeInterval(3600)),
+            ActivityIntervalSnapshot(categoryID: work, start: date, end: date.addingTimeInterval(7200)),
+            ActivityIntervalSnapshot(categoryID: rest, start: range.end.addingTimeInterval(-1800), end: range.end.addingTimeInterval(3600)),
+            ActivityIntervalSnapshot(categoryID: rest, start: range.end, end: range.end.addingTimeInterval(7200))
+        ]
+        let segments = ActivityTimeline.segments(in: range, intervals: intervals, now: range.end.addingTimeInterval(7200))
+        XCTAssertEqual(ActivityTimeline.totals(for: segments), [work: 10800, rest: 1800])
+        XCTAssertEqual(segments.reduce(0) { $0 + $1.duration }, range.duration)
+        XCTAssertEqual(segments.first?.start, range.start)
+        XCTAssertEqual(segments.last?.end, range.end)
+
+        calendar.firstWeekday = 1
+        XCTAssertEqual(ActivityBalancePeriod.week.range(containing: date, calendar: calendar)?.start,
+                       calendar.date(from: DateComponents(year: 2025, month: 12, day: 28)))
+    }
+
+    func testCurrentMonthIncludesLiveTimeButExcludesFutureTime() throws {
+        let now = calendar.date(from: DateComponents(year: 2028, month: 2, day: 15, hour: 12))!
+        let range = try XCTUnwrap(ActivityBalancePeriod.month.range(containing: now, calendar: calendar))
+        XCTAssertEqual(range.duration, 29 * 86400)
+        let intervals = [ActivityIntervalSnapshot(categoryID: work, start: now.addingTimeInterval(-5400))]
+        let segments = ActivityTimeline.segments(in: range, intervals: intervals, now: now)
+        XCTAssertEqual(ActivityTimeline.totals(for: segments), [work: 5400])
+        XCTAssertEqual(segments.last?.end, now)
+        XCTAssertEqual(segments.filter { $0.categoryID == nil }.reduce(0) { $0 + $1.duration },
+                       now.timeIntervalSince(range.start) - 5400)
+        let future = try XCTUnwrap(ActivityBalancePeriod.month.range(containing: range.end, calendar: calendar))
+        XCTAssertTrue(ActivityTimeline.segments(in: future, intervals: intervals, now: now).isEmpty)
+        let empty = ActivityTimeline.segments(in: range, intervals: [], now: now)
+        XCTAssertTrue(ActivityTimeline.totals(for: empty).isEmpty)
+        XCTAssertEqual(empty.reduce(0) { $0 + $1.duration }, now.timeIntervalSince(range.start))
+    }
+
+    func testWeeklyAndMonthlyBalancesRespectDaylightSavingChanges() throws {
+        var calendar = self.calendar
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        calendar.firstWeekday = 2
+        for (month, day, adjustment, days) in [(3, 8, -1, 31), (11, 1, 1, 30)] {
+            let date = calendar.date(from: DateComponents(year: 2026, month: month, day: day))!
+            for (period, count) in [(ActivityBalancePeriod.week, 7), (.month, days)] {
+                let range = try XCTUnwrap(period.range(containing: date, calendar: calendar))
+                let interval = ActivityIntervalSnapshot(categoryID: work, start: range.start, end: range.end)
+                let segments = ActivityTimeline.segments(in: range, intervals: [interval], now: range.end)
+                XCTAssertEqual(ActivityTimeline.totals(for: segments)[work], Double((count * 24 + adjustment) * 3600))
+            }
+        }
+    }
 }
