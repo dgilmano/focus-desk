@@ -10,7 +10,7 @@ The app is **ad-hoc signed, not Developer ID signed or notarized**. Ed25519 sign
 
 1. Export a backup from the previous development app before transitioning. The production sandbox is separate; do not delete the old database.
 2. Build `python3 scripts/release.py personal`, then install `dist/DerivedData/Build/Products/ReleasePersonal/Focus Desk.app` in Applications. Do not overwrite a running copy. Restore the exported backup through Data & Backups when moving from an unsandboxed or `.dev` build.
-3. Use **Focus Desk > Check for Updates...** in the macOS menu bar. If a newer published build exists, Sparkle shows its release notes and offers download, installation and relaunch.
+3. Use **Focus Desk > Check for Updates...** in the macOS menu bar, or **Option-Command-U**. If a newer published build exists, Sparkle shows its release notes and offers download, installation and relaunch.
 
 Checking and installation are user-initiated. The app does not silently replace itself while you work. A successful save, activity pause and recovery backup are required at update-related termination. Failed saving/backup creation keeps the app open. Task data, Journal and Day map remain in the same sandbox across updates.
 
@@ -55,7 +55,7 @@ Requests go to GitHub's raw-content and release-download services. GitHub receiv
 
 ## Verification
 
-Implementation checkpoint, 26 September 2026: 49 Swift tests and 18 packaging/update tests pass locally. The personal application and both unsigned distribution archives build; the App Store archive contains no Sparkle. The first personal feed/release is **not published yet**. Signing the test feed and exercising installation/relaunch are pending because this Mac was locked. Do not treat the update channel as activated until those checks and first publication are completed. No working task database was used for these tests.
+Validation on 26 September 2026: 49 Swift tests and 18 packaging/update tests pass locally and on GitHub. The personal application and both unsigned distribution archives build; the App Store archive contains no Sparkle. In the isolated `com.dgilmano.focusdesk.update-test` sandbox, Sparkle downloaded and verified the signed feed/archive, installed build 3 over build 2, and created the required recovery backup. The updated app opened with the demonstration task, Journal, Day map history and unsubmitted draft intact. A modified feed failed cryptographic verification. No working task database was used. Runtime validation was on macOS 26.6.2; macOS 14 and public notarized distribution remain release gates.
 
 Unit tests cover mandatory signatures, HTTPS/loopback separation, scoped updater permissions, build monotonicity, feed/archive metadata consistency, data saving and refusal to install without a recovery copy. The App Store archive is checked for absence of Sparkle even when unsigned.
 

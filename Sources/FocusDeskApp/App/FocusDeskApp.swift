@@ -49,6 +49,7 @@ struct FocusDeskApp: App {
             #if FOCUS_DESK_UPDATES
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates...") { updates.checkForUpdates() }
+                    .keyboardShortcut("u", modifiers: [.command, .option])
                     .disabled(!updates.canCheckForUpdates && updates.startupError == nil)
                 Divider()
             }
