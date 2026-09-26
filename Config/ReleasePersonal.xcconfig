@@ -1,0 +1,10 @@
+#include "App.xcconfig"
+#include "Updates.xcconfig"
+
+// Personal, locally installed build. Update archives have a separate Ed25519 signature.
+// Never treat this as Developer ID signed or notarized distribution.
+FOCUS_DESK_DISTRIBUTION = personal
+CODE_SIGN_IDENTITY = -
+CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO
+DEVELOPMENT_TEAM =
+ENABLE_HARDENED_RUNTIME = NO

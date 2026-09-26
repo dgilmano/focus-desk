@@ -31,6 +31,8 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
       - name: Build sandboxed developer application
         run: python3 scripts/release.py local
+      - name: Validate personal application with updater
+        run: python3 scripts/release.py personal
       - name: Validate both distribution archives without credentials
         run: |
           python3 scripts/release.py archive --channel direct --unsigned

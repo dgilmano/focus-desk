@@ -4,17 +4,20 @@
 
 Focus Desk supports **Apple Silicon and macOS 14+**. Intel is deliberately excluded. A successful local build or unsigned archive is not a signed public release and does not imply App Store approval.
 
-The checked-in Xcode project builds the same source as the dependency-free Swift package. `FocusDeskCore` is statically linked; there are no external SDKs or frameworks to redistribute. Synchronized source folders require Xcode 16+. Tests run through Swift Package Manager.
+The checked-in Xcode project builds the same source as the dependency-free Swift package. `FocusDeskCore` is statically linked. Personal and direct builds additionally embed the pinned Sparkle 2.10.0 framework, with its license bundled in Resources. The separate App Store target does not link Sparkle. Synchronized source folders require Xcode 16+. Tests run through Swift Package Manager.
 
 | Scheme | Configuration | Bundle ID | Purpose |
 | --- | --- | --- | --- |
 | FocusDesk | Debug | com.dgilmano.focusdesk.dev | Isolated local development, ad-hoc signature |
+| FocusDesk-Personal | ReleasePersonal | com.dgilmano.focusdesk | Daily personal use, ad-hoc app signature and Ed25519-signed updates |
 | FocusDesk-Direct | ReleaseDirect | com.dgilmano.focusdesk | GitHub download, Developer ID signature |
 | FocusDesk-AppStore | ReleaseAppStore | com.dgilmano.focusdesk | Mac App Store distribution |
 
 Register the production bundle ID with the eventual Apple team before the first public release. Once users install the app, keep its bundle ID and signing team stable. Debug intentionally has its own data and preferences.
 
-Both production configurations enable **App Sandbox** and **Hardened Runtime**. The only requested data access is read/write access to files explicitly selected by the user, for backup import/export. No full-disk access, outgoing network entitlement, unsigned-code exceptions or App Groups are enabled. Release builds cannot load the debug preview or environment-configured remote clock.
+Developer ID and App Store configurations enable **App Sandbox** and **Hardened Runtime**. All configurations restrict file access to their container and user-selected backup files. Updater builds additionally enable outgoing networking and two narrowly scoped Sparkle Mach service names. No full-disk access or App Groups are enabled. The personal ad-hoc build does not enable Hardened Runtime; this does not weaken the future Developer ID/App Store settings. Release builds cannot load the debug preview or environment-configured remote clock.
+
+The App Store is deliberately deferred until the feature set is ready. For the current personal-use channel, see [Personal updates](personal-updates.md). It does not require Apple membership but is not a notarized public release.
 
 ## Local build and checks
 
@@ -31,7 +34,7 @@ The local app is ad-hoc signed, not Developer ID signed or notarized. Its DMG is
 
 Archives and installers are retained under `dist/`, which is ignored by Git. Existing archives/installers are never silently overwritten. Move an old artifact aside or increment the build before repeating its command. Do not run multiple Xcode builds against the same `dist/DerivedData` at once.
 
-The validation workflow runs on a GitHub-hosted ARM64 Mac. It runs tests, builds the local app, checks both unsigned archives and creates/verifies a local DMG. It needs no signing credentials, does not upload artifacts, and cannot publish releases.
+The validation workflow runs on a GitHub-hosted ARM64 Mac. It runs tests, builds the local and personal apps, checks both unsigned archives and creates/verifies a local DMG. It needs no signing credentials, does not upload artifacts, and cannot publish releases.
 
 If Xcode fails before reading the project, finish its initial component installation. `xcodebuild -checkFirstLaunchStatus` checks this. Apple's documented repair is `xcodebuild -runFirstLaunch`; review any license or administrator prompt yourself. Never work around missing components by modifying Apple's frameworks.
 
@@ -77,7 +80,7 @@ spctl --assess --type open --context context:primary-signature --verbose=2 \
 python3 scripts/release.py checksum dist/installers/FocusDesk-0.1.0-1-arm64.dmg
 ```
 
-Recompute SHA-256 **after** stapling because it changes the file. Test a browser-downloaded DMG on another Mac/user account with normal Gatekeeper settings. Drag the application to Applications and launch it. Only then attach the final DMG and checksum to a GitHub release. Retain the matching `.xcarchive` and dSYM for crash reports; never commit them to source control. The current scripts do not publish releases or implement automatic application updates.
+Recompute SHA-256 **after** stapling because it changes the file. Test a browser-downloaded DMG on another Mac/user account with normal Gatekeeper settings. Drag the application to Applications and launch it. Only then attach the final DMG and checksum to a GitHub release. Retain the matching `.xcarchive` and dSYM for crash reports; never commit them to source control. The personal updater publisher is separate from this public notarized channel. The direct configuration's `updates/stable/appcast.xml` is reserved, not active: publish and test its first properly signed feed before distributing that channel.
 
 ## Mac App Store
 

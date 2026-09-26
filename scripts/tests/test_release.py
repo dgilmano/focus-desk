@@ -40,12 +40,24 @@ class ReleaseTests(unittest.TestCase):
                 release.validate_versions(version, build)
 
     def test_entitlements_are_minimal_for_both_channels(self):
-        for mode in ["local", "direct", "app-store"]:
+        for mode in ["local", "app-store"]:
             release.validate_entitlements(self.entitlements(), mode)
         for extra in ["com.apple.security.network.client", "com.apple.security.cs.disable-library-validation",
                       "com.apple.security.get-task-allow", "com.apple.security.application-groups"]:
             with self.subTest(extra=extra), self.assertRaises(ValueError):
-                release.validate_entitlements({**self.entitlements(), extra: True}, "direct")
+                release.validate_entitlements({**self.entitlements(), extra: True}, "app-store")
+
+    def test_update_permissions_are_scoped_to_own_helpers(self):
+        entitlements = {**self.entitlements(), "com.apple.security.network.client": True,
+                        "com.apple.security.temporary-exception.mach-lookup.global-name":
+                        [release.BUNDLE_ID + "-spks", release.BUNDLE_ID + "-spki"]}
+        for mode in ["personal", "direct"]:
+            release.validate_entitlements(entitlements, mode)
+            with self.assertRaises(ValueError):
+                release.validate_entitlements(self.entitlements(), mode)
+        entitlements["com.apple.security.temporary-exception.mach-lookup.global-name"].append("*")
+        with self.assertRaises(ValueError):
+            release.validate_entitlements(entitlements, "personal")
 
     def test_sandbox_cannot_be_disabled(self):
         for mode in ["local", "direct", "app-store"]:

@@ -7,6 +7,38 @@ import XCTest
 final class DataProtectionTests: XCTestCase {
     private enum SaveFailure: Error { case diskFull }
 
+    func testUpdateSavesDraftAndPausesActivityBeforeRecoveryCopy() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let session = WorkspaceSession(container: container, backupDirectory: directory, observeLifecycle: false)
+        let task = populatedTask()
+        XCTAssertTrue(session.tasks.create(task))
+        task.localDraft = "Unsubmitted work must survive the update"
+        XCTAssertTrue(session.activity.start(session.activity.categories[0].id, at: Date().addingTimeInterval(-60)))
+        try session.prepareForUpdate()
+        XCTAssertNil(session.activity.activeInterval)
+        let file = try XCTUnwrap(session.backups.files().first { $0.lastPathComponent.hasPrefix("recovery-") })
+        let recovery = try WorkspaceBackup.read(from: file)
+        XCTAssertEqual(recovery.tasks.first?.localDraft, task.localDraft)
+        XCTAssertEqual(recovery.entries.count, 1)
+        XCTAssertNotNil(recovery.intervals.first?.endedAt)
+    }
+
+    func testUpdateIsRefusedWhenRecoveryCopyCannotBeWritten() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let blocked = directory.appendingPathComponent("occupied")
+        try Data("not a directory".utf8).write(to: blocked)
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let session = WorkspaceSession(container: container, backupDirectory: blocked, observeLifecycle: false)
+        let task = populatedTask()
+        XCTAssertTrue(session.tasks.create(task))
+        task.localDraft = "Keep this draft"
+        XCTAssertThrowsError(try session.prepareForUpdate())
+        XCTAssertEqual(try WorkspaceBackup.capture(from: ModelContext(container)).tasks.first?.localDraft, task.localDraft)
+    }
+
     func testFailedBoundEditRetainsTextAndCanBeRetried() throws {
         let container = try PersistenceController.makeModelContainer(inMemory: true)
         let context = container.mainContext

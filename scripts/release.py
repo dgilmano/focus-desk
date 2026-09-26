@@ -2,6 +2,7 @@
 """Build and package Focus Desk. Nothing is uploaded or published by this tool."""
 
 import argparse
+import base64
 import hashlib
 import plistlib
 import re
@@ -61,7 +62,8 @@ def validate_team(team):
 
 
 def validate_metadata(info, mode):
-    expected = BUNDLE_ID + ".dev" if mode == "local" else BUNDLE_ID
+    suffix = {"local": ".dev", "update-test": ".update-test"}.get(mode, "")
+    expected = BUNDLE_ID + suffix
     require(info.get("CFBundleIdentifier") == expected, "Unexpected bundle identifier; refusing this artifact.")
     require(info.get("CFBundlePackageType") == "APPL", "Not a macOS application bundle.")
     require(info.get("CFBundleExecutable") == "FocusDesk", "Unexpected application executable.")
@@ -71,7 +73,7 @@ def validate_metadata(info, mode):
     validate_versions(info.get("CFBundleShortVersionString", ""), info.get("CFBundleVersion", ""))
 
 
-def validate_entitlements(entitlements, mode):
+def validate_entitlements(entitlements, mode, bundle_id=BUNDLE_ID):
     require(entitlements.get("com.apple.security.app-sandbox") is True, "App Sandbox is required.")
     require(entitlements.get("com.apple.security.files.user-selected.read-write") is True,
             "User-selected file access is required for backup import/export.")
@@ -79,6 +81,11 @@ def validate_entitlements(entitlements, mode):
                "com.apple.application-identifier", "com.apple.developer.team-identifier"}
     if mode == "local":
         allowed.add("com.apple.security.get-task-allow")
+    if mode in ("personal", "direct", "update-test"):
+        allowed.update({"com.apple.security.network.client", "com.apple.security.temporary-exception.mach-lookup.global-name"})
+        require(entitlements.get("com.apple.security.network.client") is True, "Updater network access is missing.")
+        require(entitlements.get("com.apple.security.temporary-exception.mach-lookup.global-name") ==
+                [bundle_id + "-spks", bundle_id + "-spki"], "Updater IPC permissions must be scoped to this app.")
     require(not (set(entitlements) - allowed), "Unexpected entitlements; review before distribution.")
 
 
@@ -89,7 +96,7 @@ def signature_details(app):
 
 
 def validate_signature(details, mode):
-    if mode == "local":
+    if mode in ("local", "personal", "update-test"):
         require("Signature=adhoc" in details, "Local builds must use an ad-hoc signature.")
         return
     authorities = ("Authority=Developer ID Application:",) if mode == "direct" else (
@@ -112,17 +119,43 @@ def verify(app, mode):
     icon_path = app / "Contents/Resources" / icon
     require(icon_path.is_file() or icon_path.with_suffix(".icns").is_file(), "Compiled icon is missing.")
     require(not (app / "Contents/PlugIns").exists(), "Unreviewed embedded extensions found.")
+    framework = app / "Contents/Frameworks/Sparkle.framework"
+    if mode in ("personal", "direct", "update-test"):
+        require(info.get("FocusDeskDistribution") == mode, "Missing or incorrect distribution channel.")
+    if "FocusDeskDistribution" in info:
+        validate_update_metadata(info, allow_local=mode == "update-test")
+        require(framework.is_dir(), "Updater framework is missing.")
+    if mode in ("local", "app-store"):
+        require(not framework.exists() and "SUFeedURL" not in info, "This channel must not contain Sparkle.")
     if mode != "unsigned":
         run("codesign", "--verify", "--deep", "--strict", app)
         entitlements = plistlib.loads(run("codesign", "--display", "--entitlements", "-", "--xml", app, capture=True))
-        validate_entitlements(entitlements, mode)
+        validate_entitlements(entitlements, mode, info["CFBundleIdentifier"])
         validate_signature(signature_details(app), mode)
     print(f"Verified {mode}: {app}")
     return info
 
 
+def validate_update_metadata(info, allow_local=False):
+    from urllib.parse import urlparse
+    url = urlparse(info.get("SUFeedURL", ""))
+    require(url.scheme == "https" or (allow_local and url.scheme == "http" and url.hostname == "127.0.0.1"),
+            "The update feed must use HTTPS.")
+    require(url.hostname and not url.username and not url.password and not url.fragment, "Invalid update feed URL.")
+    key = base64.b64decode(info.get("SUPublicEDKey", ""), validate=True)
+    require(len(key) == 32, "A valid Ed25519 update public key is required.")
+    for setting in ("SUVerifyUpdateBeforeExtraction", "SURequireSignedFeed", "SUEnableInstallerLauncherService"):
+        require(info.get(setting) is True, f"{setting} must be enabled.")
+    require(info.get("SUSignedFeedFailureExpirationInterval") == 0, "Feed signature validation must not expire.")
+    for setting in ("SUEnableAutomaticChecks", "SUAllowsAutomaticUpdates", "SUAutomaticallyUpdate", "SUSendProfileInfo"):
+        require(info.get(setting) is False, f"{setting} must be disabled for manual-only updates.")
+    if not allow_local:
+        require("NSAppTransportSecurity" not in info, "Release builds must not contain test transport exceptions.")
+
+
 def xcode_args(scheme):
     return ["xcodebuild", "-project", ROOT / "FocusDesk.xcodeproj", "-scheme", scheme,
+            "-packageAuthorizationProvider", "netrc",
             "-destination", "generic/platform=macOS", "-derivedDataPath", DIST / "DerivedData", "-quiet"]
 
 
@@ -140,6 +173,12 @@ def local(_args):
     print("Local testing only. Separate .dev workspace; not a public release.")
 
 
+def personal(_args):
+    run(*xcode_args("FocusDesk-Personal"), "-configuration", "ReleasePersonal", "build")
+    verify(DIST / "DerivedData/Build/Products/ReleasePersonal/Focus Desk.app", "personal")
+    print("Personal build with signed updates. Not Apple notarized; not an App Store release.")
+
+
 def archive(args):
     scheme, configuration = CHANNELS[args.channel]
     version, build = versions()
@@ -152,6 +191,10 @@ def archive(args):
     run(*xcode_args(scheme), "-configuration", configuration, "-archivePath", path, *signing, "archive")
     app = path / "Products/Applications/Focus Desk.app"
     verify(app, "unsigned" if args.unsigned else args.channel)
+    if args.channel == "app-store":
+        require("SUFeedURL" not in read_plist(app / "Contents/Info.plist") and
+                not (app / "Contents/Frameworks/Sparkle.framework").exists(),
+                "App Store archive must not contain the external updater.")
     require((path / "dSYMs/Focus Desk.app.dSYM").is_dir(), "Archive is missing crash-debugging symbols.")
     print(f"Archive: {path}")
     if args.unsigned:
@@ -231,6 +274,7 @@ def parser():
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
     commands.add_parser("local", help="Build an isolated, ad-hoc signed developer app").set_defaults(action=local)
+    commands.add_parser("personal", help="Build the personal app with manual, signed updates").set_defaults(action=personal)
     item = commands.add_parser("archive", help="Create an ARM64 distribution archive")
     item.add_argument("--channel", choices=CHANNELS, required=True)
     item.add_argument("--unsigned", action="store_true", help="Structural validation only; not installable")
@@ -249,7 +293,7 @@ def parser():
     item.set_defaults(action=dmg)
     item = commands.add_parser("verify", help="Check architecture, metadata, resources and signatures")
     item.add_argument("--app", required=True)
-    item.add_argument("--mode", choices=["local", "unsigned", *CHANNELS], required=True)
+    item.add_argument("--mode", choices=["local", "unsigned", "personal", "update-test", *CHANNELS], required=True)
     item.set_defaults(action=lambda args: verify(args.app, args.mode))
     item = commands.add_parser("checksum", help="Refresh SHA-256 after stapling the final DMG")
     item.add_argument("artifact")

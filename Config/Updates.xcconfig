@@ -1,0 +1,6 @@
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) FOCUS_DESK_UPDATES
+INFOPLIST_PREPROCESSOR_DEFINITIONS = FOCUS_DESK_UPDATES=1
+CODE_SIGN_ENTITLEMENTS = Config/FocusDeskUpdates.entitlements
+ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES
+UPDATE_FEED_URL = https:/$()/raw.githubusercontent.com/dgilmano/focus-desk/main/updates/personal/appcast.xml
+UPDATE_PUBLIC_KEY = BezmiEBXV3j88K+tedguqtrjSmA8VV5Vchc+K+mQFeQ=

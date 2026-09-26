@@ -6,6 +6,8 @@
     objects = {
         /* Build files and dependencies */
         A00000000000000000000001 = {isa = PBXBuildFile; fileRef = A00000000000000000000012; };
+        B00000000000000000000001 = {isa = PBXBuildFile; fileRef = A00000000000000000000012; };
+        B00000000000000000000002 = {isa = PBXBuildFile; productRef = B00000000000000000000081; };
         A00000000000000000000002 = {
             isa = PBXContainerItemProxy;
             containerPortal = A00000000000000000000050;
@@ -20,6 +22,10 @@
         };
 
         /* Products and configuration files */
+        B00000000000000000000011 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Focus Desk.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+        B00000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ReleasePersonal.xcconfig; sourceTree = "<group>"; };
+        B00000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = UpdatesDebug.xcconfig; sourceTree = "<group>"; };
+        B00000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = UpdatesDirect.xcconfig; sourceTree = "<group>"; };
         A00000000000000000000011 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Focus Desk.app"; sourceTree = BUILT_PRODUCTS_DIR; };
         A00000000000000000000012 = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libFocusDeskCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
         A00000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
@@ -54,18 +60,21 @@
         };
         A00000000000000000000024 = {
             isa = PBXGroup;
-            children = (A00000000000000000000011, A00000000000000000000012);
+            children = (A00000000000000000000011, A00000000000000000000012, B00000000000000000000011);
             name = Products;
             sourceTree = "<group>";
         };
         A00000000000000000000025 = {
             isa = PBXGroup;
-            children = (A00000000000000000000013, A00000000000000000000014, A00000000000000000000015, A00000000000000000000016, A00000000000000000000017, A00000000000000000000018, A00000000000000000000019, A0000000000000000000001A);
+            children = (A00000000000000000000013, A00000000000000000000014, A00000000000000000000015, A00000000000000000000016, A00000000000000000000017, A00000000000000000000018, A00000000000000000000019, A0000000000000000000001A, B00000000000000000000013, B00000000000000000000014, B00000000000000000000015);
             path = Config;
             sourceTree = "<group>";
         };
 
         /* Build phases */
+        B00000000000000000000030 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        B00000000000000000000031 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000001, B00000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+        B00000000000000000000032 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         A00000000000000000000030 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         A00000000000000000000031 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001); runOnlyForDeploymentPostprocessing = 0; };
         A00000000000000000000032 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
@@ -73,6 +82,19 @@
         A00000000000000000000034 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 
         /* Targets */
+        B00000000000000000000040 = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = B00000000000000000000071;
+            buildPhases = (B00000000000000000000030, B00000000000000000000031, B00000000000000000000032);
+            buildRules = ();
+            dependencies = (A00000000000000000000003);
+            fileSystemSynchronizedGroups = (A00000000000000000000020, A00000000000000000000022);
+            name = FocusDeskUpdates;
+            packageProductDependencies = (B00000000000000000000081);
+            productName = "Focus Desk";
+            productReference = B00000000000000000000011;
+            productType = "com.apple.product-type.application";
+        };
         A00000000000000000000040 = {
             isa = PBXNativeTarget;
             buildConfigurationList = A00000000000000000000071;
@@ -113,10 +135,18 @@
             productRefGroup = A00000000000000000000024;
             projectDirPath = "";
             projectRoot = "";
-            targets = (A00000000000000000000040, A00000000000000000000041);
+            targets = (A00000000000000000000040, A00000000000000000000041, B00000000000000000000040);
+            packageReferences = (B00000000000000000000080);
         };
 
         /* Project configurations */
+        B00000000000000000000060 = {isa = XCBuildConfiguration; baseConfigurationReference = A00000000000000000000013; buildSettings = {SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_COMPILATION_MODE = wholemodule; ENABLE_NS_ASSERTIONS = NO; }; name = ReleasePersonal; };
+        B00000000000000000000061 = {isa = XCBuildConfiguration; baseConfigurationReference = A00000000000000000000015; buildSettings = {}; name = ReleasePersonal; };
+        B00000000000000000000062 = {isa = XCBuildConfiguration; buildSettings = {PRODUCT_NAME = FocusDeskCore; DEFINES_MODULE = YES; SKIP_INSTALL = YES; SWIFT_INSTALL_OBJC_HEADER = NO; CODE_SIGNING_ALLOWED = NO; }; name = ReleasePersonal; };
+        B00000000000000000000063 = {isa = XCBuildConfiguration; baseConfigurationReference = B00000000000000000000014; buildSettings = {}; name = Debug; };
+        B00000000000000000000064 = {isa = XCBuildConfiguration; baseConfigurationReference = B00000000000000000000015; buildSettings = {}; name = ReleaseDirect; };
+        B00000000000000000000065 = {isa = XCBuildConfiguration; baseConfigurationReference = A00000000000000000000016; buildSettings = {}; name = ReleaseAppStore; };
+        B00000000000000000000066 = {isa = XCBuildConfiguration; baseConfigurationReference = B00000000000000000000013; buildSettings = {}; name = ReleasePersonal; };
         A00000000000000000000060 = {
             isa = XCBuildConfiguration;
             baseConfigurationReference = A00000000000000000000013;
@@ -155,9 +185,12 @@
             buildSettings = {PRODUCT_NAME = FocusDeskCore; DEFINES_MODULE = YES; SKIP_INSTALL = YES; SWIFT_INSTALL_OBJC_HEADER = NO; CODE_SIGNING_ALLOWED = NO; };
             name = ReleaseAppStore;
         };
-        A00000000000000000000070 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000060, A00000000000000000000061, A00000000000000000000062); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
-        A00000000000000000000071 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000063, A00000000000000000000064, A00000000000000000000065); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
-        A00000000000000000000072 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000066, A00000000000000000000067, A00000000000000000000068); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+        A00000000000000000000070 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000060, A00000000000000000000061, A00000000000000000000062, B00000000000000000000060); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+        A00000000000000000000071 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000063, A00000000000000000000064, A00000000000000000000065, B00000000000000000000061); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+        A00000000000000000000072 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000066, A00000000000000000000067, A00000000000000000000068, B00000000000000000000062); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+        B00000000000000000000071 = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000063, B00000000000000000000064, B00000000000000000000065, B00000000000000000000066); defaultConfigurationIsVisible = 0; defaultConfigurationName = ReleasePersonal; };
+        B00000000000000000000080 = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/sparkle-project/Sparkle"; requirement = {kind = exactVersion; version = 2.10.0; }; };
+        B00000000000000000000081 = {isa = XCSwiftPackageProductDependency; package = B00000000000000000000080; productName = Sparkle; };
     };
     rootObject = A00000000000000000000050;
 }

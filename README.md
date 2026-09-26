@@ -2,7 +2,7 @@
 
 Focus Desk is a native SwiftUI macOS app for focusing on one long-running task at a time. It keeps the current task visible, tracks the next step, records what has been done, preserves per-task drafts locally, and keeps a lightweight journal of progress.
 
-Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds are not supported. Distribution is planned for the Mac App Store and signed, notarized GitHub downloads.
+Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds are not supported. The current priority is a personal, locally installed application with signed GitHub updates. Public notarized distribution and the Mac App Store are later milestones.
 
 ## Highlights
 
@@ -38,7 +38,9 @@ python3 scripts/release.py local
 
 The app is created at `dist/DerivedData/Build/Products/Debug/Focus Desk.app`. It is called **Focus Desk Dev** when running and uses a separate, sandboxed development workspace. No Apple Developer membership is required for this ad-hoc signed local build. It is not a public release.
 
-`FocusDesk.xcodeproj` includes shared schemes for development, Developer ID distribution on GitHub, and Mac App Store distribution. All build **arm64 only** with macOS 14 as the minimum. Version and build number live in `Config/Version.xcconfig`.
+`FocusDesk.xcodeproj` includes shared schemes for development, personal use, Developer ID distribution on GitHub, and Mac App Store distribution. All build **arm64 only** with macOS 14 as the minimum. Version and build number live in `Config/Version.xcconfig`.
+
+For daily personal use, build `python3 scripts/release.py personal`. This sandboxed app includes **Focus Desk > Check for Updates...**, powered by Sparkle 2.10.0. After an update is published, this command checks, downloads, installs and relaunches with the user's confirmation. Metadata and archives require Ed25519 signatures, and installation requires saving data and creating a recovery copy. It does not download or install updates in the background. The first personal installation must be built locally; its ad-hoc signature is **not** Apple Developer ID signing or notarization. See [personal updates](docs/personal-updates.md) for installation and publishing.
 
 The dependency-free Swift package remains the test and lightweight development entry point:
 
@@ -53,7 +55,7 @@ These Swift package commands do not create a distributable app bundle and are no
 
 The widget scaffold is disabled in the app until a real extension, App Group and signing configuration are added. The extension entry point uses `FOCUS_DESK_WIDGET_EXTENSION`; the app writer separately uses `FOCUS_DESK_WIDGET_HOST`. Do not enable either in a release without updating entitlements and the privacy manifest.
 
-Debug Swift package builds can use `FOCUS_DESK_SERVER_TIME_URL` with an HTTP `Date` endpoint. Release builds always use the local clock. The Xcode app has no network entitlement; cloud sign-in remains an unfinished UI, not working cloud sync.
+Debug Swift package builds can use `FOCUS_DESK_SERVER_TIME_URL` with an HTTP `Date` endpoint. Release builds always use the local clock. Only updater builds have outgoing network access for GitHub downloads; cloud sign-in remains an unfinished UI, not working cloud sync. The App Store target does not link Sparkle or include its update settings.
 
 Packaging, signing, notarization, Apple account setup, and release gates: [macOS release guide](docs/macos-release.md).
 

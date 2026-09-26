@@ -1,0 +1,5 @@
+#include "ReleaseDirect.xcconfig"
+#include "Updates.xcconfig"
+
+FOCUS_DESK_DISTRIBUTION = direct
+UPDATE_FEED_URL = https:/$()/raw.githubusercontent.com/dgilmano/focus-desk/main/updates/stable/appcast.xml

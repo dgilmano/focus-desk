@@ -1,0 +1,4 @@
+#include "Debug.xcconfig"
+#include "Updates.xcconfig"
+
+FOCUS_DESK_DISTRIBUTION = development

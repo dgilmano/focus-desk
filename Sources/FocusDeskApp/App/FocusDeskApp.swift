@@ -6,6 +6,9 @@ import SwiftData
 struct FocusDeskApp: App {
     @NSApplicationDelegateAdaptor(FocusDeskAppDelegate.self) private var appDelegate
     @State private var workspace: WorkspaceBootstrap
+    #if FOCUS_DESK_UPDATES
+    @State private var updates = AppUpdateService()
+    #endif
 
     @AppStorage("isDarkTheme")
     private var isDarkTheme = false
@@ -29,6 +32,12 @@ struct FocusDeskApp: App {
                 .frame(minWidth: 720, minHeight: 520)
                 .onAppear {
                     appDelegate.session = workspace.session
+                    #if FOCUS_DESK_UPDATES
+                    updates.installationStateChanged = { [weak delegate = appDelegate] pending in
+                        delegate?.isInstallingUpdate = pending
+                    }
+                    updates.workspaceAvailable = { [weak workspace = workspace] in workspace?.session != nil }
+                    #endif
                     NSApplication.shared.activate(ignoringOtherApps: true)
                 }
                 .onChange(of: workspace.session != nil) { appDelegate.session = workspace.session }
@@ -37,6 +46,13 @@ struct FocusDeskApp: App {
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
         .commands {
+            #if FOCUS_DESK_UPDATES
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") { updates.checkForUpdates() }
+                    .disabled(!updates.canCheckForUpdates && updates.startupError == nil)
+                Divider()
+            }
+            #endif
             FocusDeskCommands(tasks: workspace.session?.tasks)
         }
 

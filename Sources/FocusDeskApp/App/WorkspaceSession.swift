@@ -42,6 +42,12 @@ final class WorkspaceSession {
         return true
     }
 
+    func prepareForUpdate() throws {
+        guard tasks.save(), activity.pause() else { throw UpdatePreparationError.saveFailed }
+        try backups.safetyCopy()
+        backups.flush()
+    }
+
     func exportSnapshot() throws -> WorkspaceBackup {
         // Tasks may have unsaved edits; Day map lives in its own context and must be read fresh.
         var snapshot = try WorkspaceBackup.capture(from: container.mainContext)
@@ -93,8 +99,24 @@ final class WorkspaceBootstrap {
 @MainActor
 final class FocusDeskAppDelegate: NSObject, NSApplicationDelegate {
     var session: WorkspaceSession?
+    var isInstallingUpdate = false
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if isInstallingUpdate {
+            do {
+                guard let session else { throw UpdatePreparationError.workspaceUnavailable }
+                try session.prepareForUpdate()
+                return .terminateNow
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Update postponed"
+                alert.informativeText = "Focus Desk must save your changes and create a recovery copy before updating. \(error.localizedDescription)"
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "Keep Open")
+                alert.runModal()
+                return .terminateCancel
+            }
+        }
         guard let session, !session.prepareToQuit() else { return .terminateNow }
         let alert = NSAlert()
         alert.messageText = "Some changes have not been saved"
