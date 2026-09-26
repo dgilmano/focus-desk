@@ -1,12 +1,14 @@
 import FocusDeskCore
 import Foundation
 
-#if canImport(WidgetKit)
+#if FOCUS_DESK_WIDGET_HOST && canImport(WidgetKit)
 import WidgetKit
 #endif
 
 enum WidgetSnapshotWriter {
     static func write(currentTask: FocusTask?, activeTaskCount: Int) {
+        // Enable only together with a signed widget extension and a real App Group.
+        #if FOCUS_DESK_WIDGET_HOST
         let snapshot: WidgetSnapshot
 
         if let currentTask {
@@ -24,6 +26,7 @@ enum WidgetSnapshotWriter {
 
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()
+        #endif
         #endif
     }
 }

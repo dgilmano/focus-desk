@@ -1,0 +1,4 @@
+#include "App.xcconfig"
+
+CODE_SIGN_IDENTITY = Apple Distribution
+#include? "Signing.local.xcconfig"

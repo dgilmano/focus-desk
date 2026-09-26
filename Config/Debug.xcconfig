@@ -1,0 +1,8 @@
+#include "App.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = com.dgilmano.focusdesk.dev
+APP_DISPLAY_NAME = Focus Desk Dev
+CODE_SIGN_IDENTITY = -
+ENABLE_HARDENED_RUNTIME = NO
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG
+#include? "Signing.local.xcconfig"

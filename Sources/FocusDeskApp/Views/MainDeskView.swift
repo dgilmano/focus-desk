@@ -67,7 +67,11 @@ struct MainDeskView: View {
     @FocusState private var noteFocused: Bool
 
     private let router = DeskRouter()
+    #if DEBUG
     private let serverClock = OfflineFirstServerClock.environmentBacked()
+    #else
+    private let serverClock = OfflineFirstServerClock()
+    #endif
     private let defaultSidebarWidth = 174.0
     private let minExpandedSidebarWidth = 132.0
     private let maxSidebarWidth = 260.0

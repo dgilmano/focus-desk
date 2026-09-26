@@ -12,7 +12,7 @@ Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds a
 - Keyboard-first workflow: previous, next, record-and-next, done, and dialog escape behavior.
 - Task Manager window with Active and Completed tabs.
 - Undoable completion toast with a five-second recovery window.
-- WidgetKit source target that reads a shared current-task snapshot.
+- WidgetKit source scaffold (not included in the distributed application yet).
 - Dedicated Day map page under Focus with an adaptive activity palette: one-click switching, explicit pause, and editable names, colors, and icons. A compact palette is also available in the macOS menu bar.
 - Day map includes calendar navigation, time totals, editable intervals, gap filling, splitting, and optional task links. Its selected date is shared with the Journal in Summary.
 - Day map pairs a chronological activity journal with a native daily-balance ring and a color timeline. The layout stacks on narrow windows; category colors, archived history, and untracked gaps stay consistent across views.
@@ -30,6 +30,18 @@ Debug builds support `swift run FocusDesk --activity-preview` for visual checks 
 
 ## Build
 
+For a complete macOS application bundle, use Xcode 16 or newer on an Apple Silicon Mac:
+
+```sh
+python3 scripts/release.py local
+```
+
+The app is created at `dist/DerivedData/Build/Products/Debug/Focus Desk.app`. It is called **Focus Desk Dev** when running and uses a separate, sandboxed development workspace. No Apple Developer membership is required for this ad-hoc signed local build. It is not a public release.
+
+`FocusDesk.xcodeproj` includes shared schemes for development, Developer ID distribution on GitHub, and Mac App Store distribution. All build **arm64 only** with macOS 14 as the minimum. Version and build number live in `Config/Version.xcconfig`.
+
+The dependency-free Swift package remains the test and lightweight development entry point:
+
 ```sh
 swift build
 swift test
@@ -37,9 +49,13 @@ swift build -c release --arch arm64
 swift run FocusDesk
 ```
 
-The Swift package is intentionally dependency-free. The widget target is included as source-ready WidgetKit support; when embedded in an Xcode app-extension target, define `FOCUS_DESK_WIDGET_EXTENSION` to enable its `@main` widget bundle entry point.
+These Swift package commands do not create a distributable app bundle and are not sandboxed. Use the Xcode build to test distribution behavior. Before moving real data from an old Swift package build to the new sandboxed app, export a backup and restore it in the new app. Nothing is automatically moved or deleted.
 
-Set `FOCUS_DESK_SERVER_TIME_URL` to an endpoint that returns an HTTP `Date` header to timestamp progress from server time. Without that endpoint, the app falls back to local time and remains fully offline.
+The widget scaffold is disabled in the app until a real extension, App Group and signing configuration are added. The extension entry point uses `FOCUS_DESK_WIDGET_EXTENSION`; the app writer separately uses `FOCUS_DESK_WIDGET_HOST`. Do not enable either in a release without updating entitlements and the privacy manifest.
+
+Debug Swift package builds can use `FOCUS_DESK_SERVER_TIME_URL` with an HTTP `Date` endpoint. Release builds always use the local clock. The Xcode app has no network entitlement; cloud sign-in remains an unfinished UI, not working cloud sync.
+
+Packaging, signing, notarization, Apple account setup, and release gates: [macOS release guide](docs/macos-release.md).
 
 ## Data Protection
 

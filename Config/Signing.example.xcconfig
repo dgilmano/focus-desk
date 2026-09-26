@@ -1,0 +1,5 @@
+// Copy to Signing.local.xcconfig after joining the Apple Developer Program.
+// This local file is ignored by Git. Do not put passwords or private keys here.
+DEVELOPMENT_TEAM = YOURTEAMID
+// A Mac App Store provisioning profile must match this team and bundle ID.
+// PROVISIONING_PROFILE_SPECIFIER[config=ReleaseAppStore] = Focus Desk App Store
