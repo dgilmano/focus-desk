@@ -26,7 +26,7 @@ private struct SidebarTagItem: Identifiable {
 }
 
 struct MainDeskView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(TaskStore.self) private var taskStore
     @Environment(ActivityStore.self) private var activityStore
 
     @Query(sort: \FocusTask.sortOrder, order: .forward)
@@ -40,6 +40,7 @@ struct MainDeskView: View {
     @State private var completionToast: CompletionToast?
     @State private var toastDismissalTask: Task<Void, Never>?
     @State private var isSavingStep = false
+    @State private var journalSaveTask: Task<Void, Never>?
     @State private var isSidebarVisible = true
     @State private var sidebarDragStartWidth: Double?
     @State private var taskToDelete: FocusTask?
@@ -188,6 +189,8 @@ struct MainDeskView: View {
             }
         }
         .animation(.spring(duration: 0.34, bounce: 0.16), value: currentTaskIDRaw)
+        .safeAreaInset(edge: .bottom, spacing: 0) { DataProtectionStatus() }
+        .onDisappear { journalSaveTask?.cancel() }
         .animation(.spring(duration: 0.28, bounce: 0.12), value: completionToast?.id)
         .animation(.spring(duration: 0.26, bounce: 0.12), value: isSidebarVisible)
         .animation(.spring(duration: 0.26, bounce: 0.12), value: sidebarWidth)
@@ -222,7 +225,7 @@ struct MainDeskView: View {
                 taskToDelete = nil
             }
         } message: {
-            Text("This removes the task and its journal.")
+            Text("This removes the task and its journal. You can undo the deletion; a recovery copy will also be saved.")
         }
     }
 
@@ -996,7 +999,7 @@ struct MainDeskView: View {
         }
     }
 
-    private func createTask(_ draft: NewTaskDraft) {
+    @discardableResult private func createTask(_ draft: NewTaskDraft) -> Bool {
         createTask(
             title: draft.title,
             details: draft.details,
@@ -1007,18 +1010,18 @@ struct MainDeskView: View {
         )
     }
 
-    private func createTask(title: String, details: String) {
+    @discardableResult private func createTask(title: String, details: String) -> Bool {
         createTask(title: title, details: details, nextStep: "", motivation: "", tags: [], initialJournalEntry: "")
     }
 
-    private func createTask(
+    @discardableResult private func createTask(
         title: String,
         details: String,
         nextStep: String,
         motivation: String,
         tags: [TaskTagRecord],
         initialJournalEntry: String
-    ) {
+    ) -> Bool {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNextStep = nextStep.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1026,7 +1029,7 @@ struct MainDeskView: View {
         let trimmedJournalEntry = initialJournalEntry.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedTitle.isEmpty else {
-            return
+            return false
         }
 
         let nextOrder = (tasks.map(\.sortOrder).max() ?? -1) + 1
@@ -1047,48 +1050,40 @@ struct MainDeskView: View {
             task.entries.append(entry)
         }
 
-        modelContext.insert(task)
-        saveContext()
+        guard taskStore.create(task) else { return false }
         select(task.id)
         refreshWidgetSnapshot()
+        return true
     }
 
     private func saveJournalEntry(_ task: FocusTask) {
-        let note = task.localDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draft = task.localDraft
+        let note = draft.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !note.isEmpty else {
+        guard !note.isEmpty, !isSavingStep else {
             return
         }
 
         isSavingStep = true
 
-        Task {
+        journalSaveTask = Task {
             let timestamp = (try? await serverClock.now()) ?? Date()
-
-            await MainActor.run {
-                let entry = ProgressEntry(note: note, timestamp: timestamp, task: task)
-                task.entries.append(entry)
-                task.localDraft = ""
-                task.updatedAt = timestamp
-                saveContext()
+            guard !Task.isCancelled else { return }
+            if taskStore.recordJournal(for: task, draft: draft, at: timestamp) {
                 refreshWidgetSnapshot()
-                isSavingStep = false
             }
+            isSavingStep = false
         }
     }
 
     private func deleteJournalEntry(_ entry: ProgressEntry, from task: FocusTask) {
-        modelContext.delete(entry)
-        task.updatedAt = Date()
-        saveContext()
+        guard taskStore.delete(entry, from: task) else { return }
         refreshWidgetSnapshot()
     }
 
     private func complete(_ task: FocusTask) {
         let nextID = nextActiveTaskID(after: task.id, excluding: task.id)
-        task.completedAt = Date()
-        task.updatedAt = Date()
-        saveContext()
+        guard taskStore.setCompleted(task, true) else { return }
 
         if let nextID {
             select(nextID)
@@ -1101,9 +1096,7 @@ struct MainDeskView: View {
     }
 
     private func restore(_ task: FocusTask) {
-        task.completedAt = nil
-        task.updatedAt = Date()
-        saveContext()
+        guard taskStore.setCompleted(task, false) else { return }
         select(task.id)
         refreshWidgetSnapshot()
     }
@@ -1111,10 +1104,10 @@ struct MainDeskView: View {
     private func delete(_ task: FocusTask) {
         let replacementSelection = activeTasks.first { $0.id != task.id }?.id.uuidString ?? ""
 
-        modelContext.delete(task)
-        saveContext()
+        let deletedID = task.id.uuidString
+        guard taskStore.delete(task) else { return }
 
-        if currentTaskIDRaw == task.id.uuidString {
+        if currentTaskIDRaw == deletedID {
             currentTaskIDRaw = replacementSelection
         }
 
@@ -1160,9 +1153,7 @@ struct MainDeskView: View {
             return
         }
 
-        task.completedAt = nil
-        task.updatedAt = Date()
-        saveContext()
+        guard taskStore.setCompleted(task, false) else { return }
         select(task.id)
         self.completionToast = nil
         refreshWidgetSnapshot()
@@ -1234,11 +1225,7 @@ struct MainDeskView: View {
     }
 
     private func saveContext() {
-        do {
-            try modelContext.save()
-        } catch {
-            assertionFailure("Unable to save Focus Desk state: \(error)")
-        }
+        taskStore.save()
     }
 
     private func refreshWidgetSnapshot() {
@@ -2433,7 +2420,7 @@ private enum NewTaskFocusField: Hashable {
 
 private struct NewTaskWorkspaceView: View {
     var availableTags: [TaskTagRecord]
-    var onCreate: (NewTaskDraft) -> Void
+    var onCreate: (NewTaskDraft) -> Bool
     var onCancel: () -> Void
 
     @State private var draft = NewTaskDraft()
@@ -2682,8 +2669,7 @@ private struct NewTaskWorkspaceView: View {
             return
         }
 
-        onCreate(draft)
-        resetDraft()
+        if onCreate(draft) { resetDraft() }
     }
 }
 

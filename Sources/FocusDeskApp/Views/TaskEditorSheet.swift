@@ -21,9 +21,9 @@ struct TaskEditorSheet: View {
     @State private var details: String
 
     var mode: Mode
-    var onSave: (String, String) -> Void
+    var onSave: (String, String) -> Bool
 
-    init(mode: Mode, onSave: @escaping (String, String) -> Void) {
+    init(mode: Mode, onSave: @escaping (String, String) -> Bool) {
         self.mode = mode
         self.onSave = onSave
 
@@ -88,11 +88,10 @@ struct TaskEditorSheet: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button("Save") {
-                    onSave(
+                    if onSave(
                         title.trimmingCharacters(in: .whitespacesAndNewlines),
                         details.trimmingCharacters(in: .whitespacesAndNewlines)
-                    )
-                    dismiss()
+                    ) { dismiss() }
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
@@ -102,6 +101,7 @@ struct TaskEditorSheet: View {
         .padding(24)
         .frame(width: 460)
         .background(FocusDeskStyle.appBackground)
+        .safeAreaInset(edge: .bottom, spacing: 0) { DataProtectionStatus() }
     }
 
     private var modeIcon: String {

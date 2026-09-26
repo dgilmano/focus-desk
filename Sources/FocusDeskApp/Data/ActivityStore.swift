@@ -10,7 +10,10 @@ final class ActivityStore {
     private(set) var intervals: [ActivityInterval] = []
     var errorMessage: String?
     private(set) var notice: String?
-    @ObservationIgnored private let context: ModelContext
+    @ObservationIgnored private var context: ModelContext
+    @ObservationIgnored private let container: ModelContainer
+    @ObservationIgnored private let didSave: () -> Void
+    @ObservationIgnored private let beforeDeletion: () throws -> Void
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -19,7 +22,11 @@ final class ActivityStore {
     var activeCategory: ActivityCategory? { category(activeInterval?.categoryID) }
     var snapshots: [ActivityIntervalSnapshot] { intervals.map(\.snapshot) }
 
-    init(container: ModelContainer, observeLifecycle: Bool = true) {
+    init(container: ModelContainer, observeLifecycle: Bool = true,
+         didSave: @escaping () -> Void = {}, beforeDeletion: @escaping () throws -> Void = {}) {
+        self.container = container
+        self.didSave = didSave
+        self.beforeDeletion = beforeDeletion
         context = ModelContext(container)
         context.autosaveEnabled = false
         do {
@@ -41,6 +48,7 @@ final class ActivityStore {
             }
             try context.save()
             try reload()
+            didSave()
         } catch {
             context.rollback()
             errorMessage = "Activity could not be loaded: \(error.localizedDescription)"
@@ -115,7 +123,7 @@ final class ActivityStore {
     @discardableResult
     func deleteInterval(_ id: UUID) -> Bool {
         guard let record = interval(id) else { return false }
-        return commit { context.delete(record) }
+        return commit { try beforeDeletion(); context.delete(record) }
     }
 
     @discardableResult
@@ -154,6 +162,7 @@ final class ActivityStore {
         do {
             activeInterval.lastObservedAt = max(activeInterval.startedAt, date)
             try context.save()
+            didSave()
         } catch {
             context.rollback()
             errorMessage = error.localizedDescription
@@ -166,6 +175,7 @@ final class ActivityStore {
             try context.save()
             try reload()
             errorMessage = nil
+            didSave()
             return true
         } catch {
             context.rollback()
@@ -178,6 +188,18 @@ final class ActivityStore {
     private func reload() throws {
         categories = try context.fetch(FetchDescriptor<ActivityCategory>(sortBy: [SortDescriptor(\.sortOrder)]))
         intervals = try context.fetch(FetchDescriptor<ActivityInterval>(sortBy: [SortDescriptor(\.startedAt)]))
+    }
+
+    func reloadAfterRestore() {
+        context = ModelContext(container)
+        context.autosaveEnabled = false
+        do {
+            try reload()
+            errorMessage = nil
+            notice = "Backup restored. Choose an activity to resume."
+        } catch {
+            errorMessage = "Restored data could not be refreshed: \(error.localizedDescription)"
+        }
     }
 
     private func observeApplicationLifecycle() {

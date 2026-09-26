@@ -4,8 +4,8 @@ import SwiftData
 
 @main
 struct FocusDeskApp: App {
-    private let modelContainer: ModelContainer
-    @State private var activityStore: ActivityStore
+    @NSApplicationDelegateAdaptor(FocusDeskAppDelegate.self) private var appDelegate
+    @State private var workspace: WorkspaceBootstrap
 
     @AppStorage("isDarkTheme")
     private var isDarkTheme = false
@@ -18,61 +18,77 @@ struct FocusDeskApp: App {
         #else
         let preview = false
         #endif
-        modelContainer = PersistenceController.makeModelContainer(inMemory: preview)
-        let activity = ActivityStore(container: modelContainer)
-        _activityStore = State(initialValue: activity)
-        #if DEBUG
-        if preview { ActivityPreview.seed(container: modelContainer, store: activity) }
-        #endif
+        _workspace = State(initialValue: WorkspaceBootstrap(preview: preview))
         NSApplication.shared.setActivationPolicy(.regular)
     }
 
     var body: some Scene {
         WindowGroup("Focus Desk", id: "desk") {
-            MainDeskView()
-                .modelContainer(modelContainer)
-                .environment(activityStore)
+            workspaceContent { MainDeskView() }
                 .preferredColorScheme(isDarkTheme ? .dark : .light)
                 .frame(minWidth: 720, minHeight: 520)
                 .onAppear {
+                    appDelegate.session = workspace.session
                     NSApplication.shared.activate(ignoringOtherApps: true)
                 }
+                .onChange(of: workspace.session != nil) { appDelegate.session = workspace.session }
         }
         .defaultSize(width: 920, height: 620)
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
         .commands {
-            FocusDeskCommands()
+            FocusDeskCommands(tasks: workspace.session?.tasks)
         }
 
         Window("Task Manager", id: "task-manager") {
-            TaskManagerView()
-                .modelContainer(modelContainer)
+            workspaceContent { TaskManagerView() }
                 .preferredColorScheme(isDarkTheme ? .dark : .light)
                 .frame(minWidth: 760, minHeight: 500)
         }
         .defaultSize(width: 820, height: 560)
 
+        Window("Data & Backups", id: "data-backups") {
+            if let session = workspace.session {
+                DataBackupView(session: session)
+                    .preferredColorScheme(isDarkTheme ? .dark : .light)
+            } else {
+                StoreRecoveryView(workspace: workspace)
+            }
+        }
+        .defaultSize(width: 560, height: 460)
+
         MenuBarExtra {
-            ActivityMenuView()
-                .environment(activityStore)
-                .modelContainer(modelContainer)
+            workspaceContent { ActivityMenuView() }
                 .preferredColorScheme(isDarkTheme ? .dark : .light)
         } label: {
             Label {
-                Text(activityStore.activeCategory?.name ?? "Focus Desk")
+                Text(workspace.session?.activity.activeCategory?.name ?? "Focus Desk")
             } icon: {
                 Image(systemName: "square.fill")
                     .symbolRenderingMode(.palette)
-                    .foregroundStyle(TaskTagPalette.palette(for: activityStore.activeCategory?.colorName ?? "gray").foreground)
+                    .foregroundStyle(TaskTagPalette.palette(for: workspace.session?.activity.activeCategory?.colorName ?? "gray").foreground)
             }
         }
         .menuBarExtraStyle(.window)
+    }
+
+    @ViewBuilder private func workspaceContent<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if let session = workspace.session {
+            content()
+                .id(session.revision)
+                .modelContainer(session.container)
+                .environment(session.activity)
+                .environment(session.tasks)
+                .environment(session.backups)
+        } else {
+            StoreRecoveryView(workspace: workspace)
+        }
     }
 }
 
 struct FocusDeskCommands: Commands {
     @Environment(\.openWindow) private var openWindow
+    var tasks: TaskStore?
 
     var body: some Commands {
         CommandMenu("Focus Desk") {
@@ -80,6 +96,11 @@ struct FocusDeskCommands: Commands {
                 openWindow(id: "task-manager")
             }
             .keyboardShortcut("m", modifiers: [.command])
+
+            Button("Data & Backups...") { openWindow(id: "data-backups") }
+            Divider()
+            Button("Undo Last Deletion") { tasks?.undoDeletion() }
+                .disabled(tasks?.deletionMessage == nil)
         }
     }
 }

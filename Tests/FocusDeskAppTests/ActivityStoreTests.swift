@@ -5,7 +5,7 @@ import SwiftData
 @MainActor
 final class ActivityStoreTests: XCTestCase {
     func testSwitchPauseAndRepeatedSelectionArePersisted() throws {
-        let container = PersistenceController.makeModelContainer(inMemory: true)
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = ActivityStore(container: container, observeLifecycle: false)
         let start = Date().addingTimeInterval(-3600)
         let work = store.categories[0].id
@@ -23,8 +23,8 @@ final class ActivityStoreTests: XCTestCase {
         XCTAssertTrue(loaded.allSatisfy { $0.endedAt != nil })
     }
 
-    func testRelaunchRecoversToCheckpointAndDoesNotCountOfflineGap() {
-        let container = PersistenceController.makeModelContainer(inMemory: true)
+    func testRelaunchRecoversToCheckpointAndDoesNotCountOfflineGap() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = ActivityStore(container: container, observeLifecycle: false)
         let start = Date().addingTimeInterval(-7200)
         let checkpoint = start.addingTimeInterval(60)
@@ -37,8 +37,8 @@ final class ActivityStoreTests: XCTestCase {
         XCTAssertEqual(reopened.categories.count, 5)
     }
 
-    func testOverlapRollsBackAndSplitDeleteAndTaskLinkWork() {
-        let container = PersistenceController.makeModelContainer(inMemory: true)
+    func testOverlapRollsBackAndSplitDeleteAndTaskLinkWork() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = ActivityStore(container: container, observeLifecycle: false)
         let start = Date().addingTimeInterval(-7200)
         let category = store.categories[0].id
@@ -57,8 +57,8 @@ final class ActivityStoreTests: XCTestCase {
         XCTAssertEqual(store.intervals.count, 1)
     }
 
-    func testCategoryArchiveKeepsHistoryAndStopsActiveInterval() {
-        let container = PersistenceController.makeModelContainer(inMemory: true)
+    func testCategoryArchiveKeepsHistoryAndStopsActiveInterval() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = ActivityStore(container: container, observeLifecycle: false)
         let category = store.categories[0].id
         store.start(category, at: Date().addingTimeInterval(-60))
@@ -82,8 +82,7 @@ final class ActivityStoreTests: XCTestCase {
         let url = directory.appendingPathComponent("Migration.store")
         let taskID = UUID()
         try createOriginalStore(at: url, taskID: taskID)
-        let schema = Schema([FocusTask.self, ProgressEntry.self, ActivityCategory.self, ActivityInterval.self])
-        let upgraded = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
+        let upgraded = try PersistenceController.makeModelContainer(at: url)
         let context = ModelContext(upgraded)
         let tasks = try context.fetch(FetchDescriptor<FocusTask>())
         XCTAssertEqual(tasks.count, 1)

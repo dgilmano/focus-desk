@@ -2,6 +2,8 @@
 
 Focus Desk is a native SwiftUI macOS app for focusing on one long-running task at a time. It keeps the current task visible, tracks the next step, records what has been done, preserves per-task drafts locally, and keeps a lightweight journal of progress.
 
+Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds are not supported. Distribution is planned for the Mac App Store and signed, notarized GitHub downloads.
+
 ## Highlights
 
 - Native SwiftUI macOS application.
@@ -31,9 +33,24 @@ Debug builds support `swift run FocusDesk --activity-preview` for visual checks 
 ```sh
 swift build
 swift test
+swift build -c release --arch arm64
 swift run FocusDesk
 ```
 
 The Swift package is intentionally dependency-free. The widget target is included as source-ready WidgetKit support; when embedded in an Xcode app-extension target, define `FOCUS_DESK_WIDGET_EXTENSION` to enable its `@main` widget bundle entry point.
 
 Set `FOCUS_DESK_SERVER_TIME_URL` to an endpoint that returns an HTTP `Date` header to timestamp progress from server time. Without that endpoint, the app falls back to local time and remains fully offline.
+
+## Data Protection
+
+Open **Focus Desk > Data & Backups...** in the macOS menu bar to export, restore, or create a local backup.
+
+- Save failures are shown in the app. Bound text remains available for retry; failed Journal submissions retain the original draft and do not create duplicate entries. New Task and Task Manager editor forms only close or clear after a successful save.
+- Tasks and Journal entries have undoable deletion. The last 20 deletions can be undone during the current session using the banner or **Focus Desk > Undo Last Deletion**. A successful recovery copy is required before deleting tasks, Journal entries, or Day map intervals.
+- Automatic backups coalesce changes over up to 30 seconds and flush on a normal quit. The latest snapshot in each local hour is kept, retaining 48 hourly files. The last 20 pre-deletion, pre-restore, or manually created recovery copies are retained separately.
+- Versioned JSON backups contain all tasks, completed state, Markdown, tags, drafts, Journal, activity categories (including archived ones), intervals, and task links. UI preferences and account settings are not included. Imports are limited to 64 MB and validated before changing the workspace.
+- Restore replaces the workspace, saves a recovery copy first, and refreshes both data contexts. Imported active activity ends at its saved checkpoint; time away is not counted.
+- Startup creates a consistent SQLite snapshot before opening/migrating a production database. It includes committed WAL data. The last five successful-start snapshots are retained; failed opens do not prune them. An unreadable database shows a recovery screen instead of being silently reset. Recovering a JSON backup creates a separate database and preserves the original files.
+- Backups are stored under Application Support in `FocusDesk/Backups` (inside the app container for sandboxed distribution). They are **not encrypted** and remain on this Mac. Export copies to another protected location for device-loss protection. Local copies are not cloud sync.
+
+Implementation and release checks: [Data protection](docs/data-protection.md).

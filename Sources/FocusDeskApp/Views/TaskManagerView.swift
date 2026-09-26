@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct TaskManagerView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(TaskStore.self) private var taskStore
 
     @Query(sort: \FocusTask.sortOrder, order: .forward)
     private var tasks: [FocusTask]
@@ -76,6 +76,7 @@ struct TaskManagerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(FocusDeskStyle.appBackground)
+        .safeAreaInset(edge: .bottom, spacing: 0) { DataProtectionStatus() }
         .sheet(isPresented: $showingNewTask) {
             TaskEditorSheet(mode: .create) { title, details in
                 createTask(title: title, details: details)
@@ -86,8 +87,9 @@ struct TaskManagerView: View {
                 task.title = title
                 task.details = details
                 task.updatedAt = Date()
-                saveContext()
-                refreshWidgetSnapshot()
+                let saved = taskStore.save()
+                if saved { refreshWidgetSnapshot() }
+                return saved
             }
         }
         .sheet(item: $taskToViewHistory) { task in
@@ -104,7 +106,7 @@ struct TaskManagerView: View {
                 taskToDelete = nil
             }
         } message: {
-            Text("This removes the task and its journal.")
+            Text("This removes the task and its journal. You can undo the deletion; a recovery copy will also be saved.")
         }
     }
 
@@ -201,7 +203,7 @@ struct TaskManagerView: View {
         )
     }
 
-    private func createTask(title: String, details: String) {
+    private func createTask(title: String, details: String) -> Bool {
         let nextOrder = (tasks.map(\.sortOrder).max() ?? -1) + 1
         let now = Date()
         let task = FocusTask(
@@ -212,16 +214,14 @@ struct TaskManagerView: View {
             sortOrder: nextOrder
         )
 
-        modelContext.insert(task)
-        saveContext()
+        guard taskStore.create(task) else { return false }
         currentTaskIDRaw = task.id.uuidString
         refreshWidgetSnapshot()
+        return true
     }
 
     private func restore(_ task: FocusTask) {
-        task.completedAt = nil
-        task.updatedAt = Date()
-        saveContext()
+        guard taskStore.setCompleted(task, false) else { return }
         currentTaskIDRaw = task.id.uuidString
         selectedTab = .active
         refreshWidgetSnapshot()
@@ -230,23 +230,15 @@ struct TaskManagerView: View {
     private func delete(_ task: FocusTask) {
         let replacementSelection = activeTasks.first { $0.id != task.id }?.id.uuidString ?? ""
 
-        modelContext.delete(task)
-        saveContext()
+        let deletedID = task.id.uuidString
+        guard taskStore.delete(task) else { return }
 
-        if currentTaskIDRaw == task.id.uuidString {
+        if currentTaskIDRaw == deletedID {
             currentTaskIDRaw = replacementSelection
         }
 
         taskToDelete = nil
         refreshWidgetSnapshot()
-    }
-
-    private func saveContext() {
-        do {
-            try modelContext.save()
-        } catch {
-            assertionFailure("Unable to save Focus Desk task manager change: \(error)")
-        }
     }
 
     private func refreshWidgetSnapshot() {
