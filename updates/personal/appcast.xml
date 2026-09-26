@@ -1,0 +1,27 @@
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Focus Desk</title>
+        <item>
+            <title>0.2.0</title>
+            <pubDate>Sat, 26 Sep 2026 18:03:33 +0300</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[# Focus Desk 0.2.0
+
+- Check for Updates from the Focus Desk menu or with Option-Command-U. Download, install and relaunch without replacing the app manually.
+- A successful save and local recovery backup are required before installing an update.
+- Update metadata and archives are verified with Ed25519 signatures. Background downloading and system profiling are disabled.
+
+Personal preview for Apple Silicon, macOS 14 or later. This build is ad-hoc signed, not Apple Developer ID signed or notarized, and is not an App Store release. It is intended for the owner's locally installed copy, not general public distribution. Task data stays on your Mac; GitHub only hosts the application updates.
+]]></description>
+            <enclosure url="https://github.com/dgilmano/focus-desk/releases/download/personal-v0.2.0-2/FocusDesk-0.2.0-2-arm64-personal.zip" length="2350074" type="application/octet-stream" sparkle:edSignature="tMMX0fnhvFRcouDBXc9CCWJC4XBqdbk/5ZXWk2ErOkslon65fiUSzoxANQP7FoGfn6m5i7nA/v42p0jZWuBkAQ=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: z6sJ4JE78lg9rdXLHG+eLqdxo+XzEQp3hcF4Z+TKGcEIB87mnEc/3/ff0UottJQfHlEL2636CgKnfUhyET+XBQ==
+length: 1926
+-->
