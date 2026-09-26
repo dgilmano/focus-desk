@@ -107,6 +107,19 @@ final class ActivityStore {
     }
 
     @discardableResult
+    func resizeInterval(_ original: ActivityIntervalSnapshot, to resized: ActivityIntervalSnapshot) -> Bool {
+        guard let record = interval(original.id), record.snapshot == original,
+              resized.id == original.id, resized.categoryID == original.categoryID,
+              (resized.end == nil) == (original.end == nil) else {
+            errorMessage = "This interval changed. Please try adjusting it again."
+            return false
+        }
+        guard resized != original else { return true }
+        return saveInterval(id: original.id, categoryID: original.categoryID, start: resized.start,
+                            end: resized.end, taskID: record.taskID, taskTitle: record.taskTitle)
+    }
+
+    @discardableResult
     func splitInterval(_ id: UUID, at date: Date, now: Date = Date()) -> Bool {
         guard let record = interval(id) else { return false }
         return commit {
@@ -143,6 +156,25 @@ final class ActivityStore {
                 context.insert(ActivityCategory(name: name, colorName: color, symbol: symbol,
                                                 sortOrder: (categories.map(\.sortOrder).max() ?? -1) + 1))
             }
+        }
+    }
+
+    @discardableResult
+    func reorderCategories(_ ids: [UUID]) -> Bool {
+        let visible = availableCategories.map(\.id)
+        guard ids.count == visible.count, Set(ids) == Set(visible) else {
+            errorMessage = "Activities changed. Please try reordering them again."
+            return false
+        }
+        guard ids != visible else { return true }
+        // Archived categories keep their slots; all existing records and history retain their IDs.
+        let byID = Dictionary(uniqueKeysWithValues: availableCategories.map { ($0.id, $0) })
+        var next = ids.makeIterator()
+        let ordered = categories.map { category in
+            category.isArchived ? category : byID[next.next()!]!
+        }
+        return commit {
+            for (index, category) in ordered.enumerated() { category.sortOrder = index }
         }
     }
 

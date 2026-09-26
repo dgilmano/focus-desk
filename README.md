@@ -13,11 +13,15 @@ Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds a
 - Task Manager window with Active and Completed tabs.
 - Undoable completion toast with a five-second recovery window.
 - WidgetKit source scaffold (not included in the distributed application yet).
-- Dedicated Day map page under Focus with an adaptive activity palette: one-click switching, explicit pause, and editable names, colors, and icons. A compact palette is also available in the macOS menu bar.
-- Day map includes calendar navigation, time totals, editable intervals, gap filling, splitting, and optional task links. Its selected date is shared with the Journal in Summary.
-- Day map pairs a chronological activity journal with a native daily-balance ring and a color timeline. The layout stacks on narrow windows; category colors, archived history, and untracked gaps stay consistent across views.
+- Dedicated Day tracker page under Focus with an adaptive activity palette: one-click switching, explicit pause, and editable names, colors, and icons. A compact palette is also available in the macOS menu bar.
+- Drag activity cards to reorder the Day tracker palette, with a live animated preview. Dropping a card saves the order for future launches and the menu bar palette; dropping outside cancels the change.
+- Activity appearance uses ten color swatches and quick icon choices. The More icons button opens a searchable, grouped catalog of 152 native symbols with recent selections.
+- Day tracker includes calendar navigation, time totals, editable intervals, gap filling, splitting, and optional task links. Its selected date is shared with the Journal in Summary.
+- Click an interval's time to edit it directly in the timeline (Enter saves, Escape cancels). Click its activity name or linked task to change that assignment without opening the full editor.
+- Timeline blocks grow with recorded duration while retaining room for their labels. Drag the top or bottom edge to preview a time adjustment in one-minute steps; releasing saves it. Boundaries stop at neighbouring intervals, the selected day's edges, and now. Running intervals expose only their start edge; cross-day intervals expose only their actual endpoints on the selected day.
+- Day tracker pairs a chronological activity journal with a native daily-balance ring and a color timeline. The layout stacks on narrow windows; category colors, archived history, and untracked gaps stay consistent across views.
 - Balance switches between Day, Week, and Month, with category totals and recorded/untracked time for the selected calendar period. Weekly and monthly views include period navigation; current periods count only elapsed time. Week boundaries follow the system calendar, and the selected date remains shared with the daily timeline and Journal.
-- Sidebar navigation: Focus (Desk, Day map), Manage (New Task, Tasks, Completed, Summary), and Tags.
+- Sidebar navigation: Focus (Desk, Day tracker), Manage (New Task, Tasks, Completed, Summary), and Tags.
 
 ## Activity
 
@@ -65,7 +69,7 @@ Packaging, signing, notarization, Apple account setup, and release gates: [macOS
 Open **Focus Desk > Data & Backups...** in the macOS menu bar to export, restore, or create a local backup.
 
 - Save failures are shown in the app. Bound text remains available for retry; failed Journal submissions retain the original draft and do not create duplicate entries. New Task and Task Manager editor forms only close or clear after a successful save.
-- Tasks and Journal entries have undoable deletion. The last 20 deletions can be undone during the current session using the banner or **Focus Desk > Undo Last Deletion**. A successful recovery copy is required before deleting tasks, Journal entries, or Day map intervals.
+- Tasks and Journal entries have undoable deletion. The last 20 deletions can be undone during the current session using the banner or **Focus Desk > Undo Last Deletion**. A successful recovery copy is required before deleting tasks, Journal entries, or Day tracker intervals.
 - Automatic backups coalesce changes over up to 30 seconds and flush on a normal quit. The latest snapshot in each local hour is kept, retaining 48 hourly files. The last 20 pre-deletion, pre-restore, or manually created recovery copies are retained separately.
 - Versioned JSON backups contain all tasks, completed state, Markdown, tags, drafts, Journal, activity categories (including archived ones), intervals, and task links. UI preferences and account settings are not included. Imports are limited to 64 MB and validated before changing the workspace.
 - Restore replaces the workspace, saves a recovery copy first, and refreshes both data contexts. Imported active activity ends at its saved checkpoint; time away is not counted.

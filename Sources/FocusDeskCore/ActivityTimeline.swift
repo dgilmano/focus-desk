@@ -55,7 +55,47 @@ public enum ActivityBalancePeriod: String, CaseIterable, Sendable {
     }
 }
 
+public enum ActivityIntervalEdge: Sendable {
+    case start, end
+}
+
 public enum ActivityTimeline {
+    /// Resize only an actual endpoint visible in this day, leaving neighbouring records untouched.
+    public static func resizing(
+        _ interval: ActivityIntervalSnapshot, edge: ActivityIntervalEdge, to requested: Date,
+        in day: DateInterval, among intervals: [ActivityIntervalSnapshot], now: Date
+    ) throws -> ActivityIntervalSnapshot {
+        var result = interval
+        let end = interval.end ?? now
+        let minimumDuration = min(60, end.timeIntervalSince(interval.start))
+        guard minimumDuration > 0 else { throw ActivityValidationError.invalidRange }
+        let snapped = Date(timeIntervalSinceReferenceDate: (requested.timeIntervalSinceReferenceDate / 60).rounded() * 60)
+        switch edge {
+        case .start:
+            guard interval.start >= day.start, interval.start < day.end else { throw ActivityValidationError.invalidRange }
+            if requested == interval.start { return interval }
+            let previousEnd = intervals.filter { $0.id != interval.id }
+                .compactMap(\.end).filter { $0 <= interval.start }.max() ?? day.start
+            let lower = max(day.start, previousEnd)
+            let upper = min(min(day.end, now), end.addingTimeInterval(-minimumDuration))
+            guard upper >= lower else { throw ActivityValidationError.invalidRange }
+            result.start = min(max(snapped, lower), upper)
+        case .end:
+            guard let savedEnd = interval.end, savedEnd > day.start, savedEnd <= day.end else {
+                throw ActivityValidationError.invalidRange
+            }
+            if requested == savedEnd { return interval }
+            let nextStart = intervals.filter { $0.id != interval.id && $0.start >= savedEnd }
+                .map(\.start).min() ?? day.end
+            let lower = max(day.start, interval.start.addingTimeInterval(minimumDuration))
+            let upper = min(min(day.end, now), nextStart)
+            guard upper >= lower else { throw ActivityValidationError.invalidRange }
+            result.end = min(max(snapped, lower), upper)
+        }
+        try validate(result, among: intervals, now: now)
+        return result
+    }
+
     public static func validate(
         _ candidate: ActivityIntervalSnapshot,
         among intervals: [ActivityIntervalSnapshot],

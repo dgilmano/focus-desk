@@ -49,7 +49,7 @@ final class WorkspaceSession {
     }
 
     func exportSnapshot() throws -> WorkspaceBackup {
-        // Tasks may have unsaved edits; Day map lives in its own context and must be read fresh.
+        // Tasks may have unsaved edits; Day tracker lives in its own context and must be read fresh.
         var snapshot = try WorkspaceBackup.capture(from: container.mainContext)
         let committed = try backups.snapshot()
         snapshot.categories = committed.categories

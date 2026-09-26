@@ -265,7 +265,7 @@ struct MainDeskView: View {
                             }
 
                             FocusDeskSidebarButton(
-                                title: "Day map",
+                                title: "Day tracker",
                                 systemImage: "rectangle.split.3x1",
                                 isSelected: selectedSection == .dayMap,
                                 iconColor: .teal
@@ -432,7 +432,7 @@ struct MainDeskView: View {
             }
 
             collapsedSidebarIconButton(
-                title: "Day map",
+                title: "Day tracker",
                 systemImage: "rectangle.split.3x1",
                 isSelected: selectedSection == .dayMap,
                 iconColor: .teal
@@ -796,7 +796,7 @@ struct MainDeskView: View {
     private var toolbarTitle: String {
         switch selectedSection {
         case .dayMap:
-            return "Day map"
+            return "Day tracker"
         case .desk:
             return "Desk"
         case .newTask:

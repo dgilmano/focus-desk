@@ -2,6 +2,52 @@ import XCTest
 @testable import FocusDeskCore
 
 final class ActivityTimelineTests: XCTestCase {
+    func testResizingClampsToNeighboursAndSnapsToMinutes() throws {
+        let day = calendar.dateInterval(of: .day, for: origin)!
+        let start = day.start
+        let previous = ActivityIntervalSnapshot(categoryID: rest, start: start, end: start.addingTimeInterval(3600))
+        let record = ActivityIntervalSnapshot(categoryID: work, start: start.addingTimeInterval(7200), end: start.addingTimeInterval(10800))
+        let next = ActivityIntervalSnapshot(categoryID: rest, start: start.addingTimeInterval(14400), end: start.addingTimeInterval(18000))
+        let intervals = [previous, record, next]
+        let earlier = try ActivityTimeline.resizing(record, edge: .start, to: start, in: day, among: intervals, now: day.end)
+        XCTAssertEqual(earlier.start, previous.end)
+        XCTAssertEqual(earlier.end, record.end)
+        let later = try ActivityTimeline.resizing(record, edge: .end, to: day.end, in: day, among: intervals, now: day.end)
+        XCTAssertEqual(later.end, next.start)
+        XCTAssertEqual(later.id, record.id)
+        let snapped = try ActivityTimeline.resizing(record, edge: .end, to: start.addingTimeInterval(12017), in: day, among: intervals, now: day.end)
+        XCTAssertEqual(snapped.end, start.addingTimeInterval(12000))
+        let minimum = try ActivityTimeline.resizing(record, edge: .end, to: record.start, in: day, among: intervals, now: day.end)
+        XCTAssertEqual(minimum.end, record.start.addingTimeInterval(60))
+    }
+
+    func testResizeCannotMovePastNowOrCloseRunningInterval() throws {
+        let day = calendar.dateInterval(of: .day, for: origin)!
+        let now = day.start.addingTimeInterval(7200)
+        let record = ActivityIntervalSnapshot(categoryID: work, start: day.start.addingTimeInterval(3600), end: now.addingTimeInterval(-600))
+        let result = try ActivityTimeline.resizing(record, edge: .end, to: day.end, in: day, among: [record], now: now)
+        XCTAssertEqual(result.end, now)
+        let active = ActivityIntervalSnapshot(categoryID: work, start: record.start)
+        let moved = try ActivityTimeline.resizing(active, edge: .start, to: day.start, in: day, among: [active], now: now)
+        XCTAssertNil(moved.end)
+        XCTAssertEqual(moved.start, day.start)
+        XCTAssertThrowsError(try ActivityTimeline.resizing(active, edge: .end, to: now, in: day, among: [active], now: now))
+    }
+
+    func testResizePreservesCrossDayEndpointsAndShortIntervals() throws {
+        let day = calendar.dateInterval(of: .day, for: origin)!
+        let record = ActivityIntervalSnapshot(categoryID: work, start: day.start.addingTimeInterval(-3600), end: day.start.addingTimeInterval(3600))
+        XCTAssertThrowsError(try ActivityTimeline.resizing(record, edge: .start, to: day.start, in: day, among: [record], now: day.end))
+        let resized = try ActivityTimeline.resizing(record, edge: .end, to: day.start.addingTimeInterval(7200), in: day, among: [record], now: day.end)
+        XCTAssertEqual(resized.start, record.start)
+        XCTAssertEqual(resized.end, day.start.addingTimeInterval(7200))
+        let short = ActivityIntervalSnapshot(categoryID: work, start: day.start.addingTimeInterval(30), end: day.start.addingTimeInterval(40))
+        let unchanged = try ActivityTimeline.resizing(short, edge: .end, to: short.end!, in: day, among: [short], now: day.end)
+        XCTAssertEqual(unchanged, short)
+        let minimum = try ActivityTimeline.resizing(short, edge: .end, to: day.start, in: day, among: [short], now: day.end)
+        XCTAssertEqual(minimum, short)
+    }
+
     private let work = UUID()
     private let rest = UUID()
     private let origin = Date(timeIntervalSince1970: 1_700_006_400)

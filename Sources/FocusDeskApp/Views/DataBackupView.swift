@@ -38,7 +38,7 @@ struct DataBackupView: View {
                     NSWorkspace.shared.open(session.backups.directory)
                 }
             }
-            Text("Backup files contain your tasks, journal, tags and Day map. They are not encrypted.")
+            Text("Backup files contain your tasks, journal, tags and Day tracker. They are not encrypted.")
                 .font(.callout).foregroundStyle(.secondary)
             Text("Local backups do not protect against losing this Mac. Keep an exported copy in a separate safe location.")
                 .font(.callout).foregroundStyle(.secondary)

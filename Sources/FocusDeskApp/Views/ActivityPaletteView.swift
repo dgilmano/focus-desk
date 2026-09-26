@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+private struct ActivityCardFrames: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 struct ActivityIconButton: View {
     var symbol: String
     var title: String
@@ -23,12 +30,25 @@ struct ActivityPaletteView: View {
     @Environment(ActivityStore.self) private var store
     @State private var showingSettings = false
     @State private var addingCategory = false
+    @State private var cardFrames: [UUID: CGRect] = [:]
+    @State private var dragID: UUID?
+    @State private var previewOrder: [UUID]?
+    @State private var dragSlots: [CGRect] = []
+    @State private var dragOrigin = CGRect.zero
+    @State private var dragTranslation = CGSize.zero
+    @GestureState private var isDragging = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var compact = false
     var availableWidth: CGFloat = 650
 
     private var workspaceColumns: [GridItem] {
         let count = max(1, min(store.availableCategories.count, Int(max(104, availableWidth - 80) / 112)))
         return Array(repeating: GridItem(.flexible(minimum: 0), spacing: 8), count: count)
+    }
+
+    private var displayedCategories: [ActivityCategory] {
+        guard let previewOrder else { return store.availableCategories }
+        return previewOrder.compactMap { store.category($0) }
     }
 
     var body: some View {
@@ -40,6 +60,10 @@ struct ActivityPaletteView: View {
             }
         }
         .sheet(isPresented: $showingSettings) { ActivityCategoriesView(focusNewActivity: addingCategory) }
+        .onChange(of: store.availableCategories.map(\.id)) { cancelDrag() }
+        .onChange(of: availableWidth) { cancelDrag() }
+        .onChange(of: isDragging) { if !isDragging { cancelDrag() } }
+        .onDisappear { cancelDrag() }
     }
 
     private var compactPalette: some View {
@@ -107,12 +131,33 @@ struct ActivityPaletteView: View {
                         .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
                 } else {
                     LazyVGrid(columns: workspaceColumns, spacing: 8) {
-                        ForEach(store.availableCategories) { category in
+                        ForEach(displayedCategories) { category in
                             workspaceActivityButton(category)
+                                .opacity(dragID == category.id ? 0.25 : 1)
+                                .background {
+                                    GeometryReader { geometry in
+                                        Color.clear.preference(key: ActivityCardFrames.self,
+                                            value: [category.id: geometry.frame(in: .named("activityPalette"))])
+                                    }
+                                }
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .layoutPriority(1)
+                    .overlay(alignment: .topLeading) {
+                        if let dragID, let category = store.category(dragID) {
+                            workspaceActivityButton(category)
+                                .frame(width: dragOrigin.width, height: dragOrigin.height)
+                                .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                                .position(x: dragOrigin.midX + dragTranslation.width,
+                                          y: dragOrigin.midY + dragTranslation.height)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .coordinateSpace(name: "activityPalette")
+                    .onPreferenceChange(ActivityCardFrames.self) { cardFrames = $0 }
+                    .highPriorityGesture(reorderGesture)
                 }
                 paletteAction(symbol: "plus", title: "Add activity") {
                     addingCategory = true
@@ -124,6 +169,52 @@ struct ActivityPaletteView: View {
                 }
             }
         }
+    }
+
+    private var reorderGesture: some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .named("activityPalette"))
+            .updating($isDragging) { _, active, _ in active = true }
+            .onChanged { value in
+                if dragID == nil {
+                    guard let category = store.availableCategories.first(where: {
+                        cardFrames[$0.id]?.contains(value.startLocation) == true
+                    }), let origin = cardFrames[category.id] else { return }
+                    let slots = store.availableCategories.compactMap { cardFrames[$0.id] }
+                    guard slots.count == store.availableCategories.count else { return }
+                    dragID = category.id
+                    dragOrigin = origin
+                    dragSlots = slots
+                    previewOrder = store.availableCategories.map(\.id)
+                }
+                dragTranslation = value.translation
+                guard let dragID, var order = previewOrder,
+                      let from = order.firstIndex(of: dragID),
+                      let to = dragSlots.firstIndex(where: { $0.contains(value.location) }), from != to else { return }
+                order.remove(at: from)
+                order.insert(dragID, at: to)
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { previewOrder = order }
+            }
+            .onEnded { value in
+                if let order = previewOrder,
+                   dragSlots.contains(where: { $0.insetBy(dx: -4, dy: -4).contains(value.location) }) {
+                    _ = store.reorderCategories(order)
+                }
+                cancelDrag()
+            }
+    }
+
+    private func cancelDrag() {
+        dragID = nil
+        previewOrder = nil
+        dragSlots = []
+        dragTranslation = .zero
+    }
+
+    private func moveCategory(_ id: UUID, by offset: Int) {
+        var ids = store.availableCategories.map(\.id)
+        guard let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
+        ids.swapAt(index, index + offset)
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { _ = store.reorderCategories(ids) }
     }
 
     private var currentName: some View {
@@ -167,10 +258,12 @@ struct ActivityPaletteView: View {
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
-        .help(category.name)
+        .help("\(category.name) · Drag to reorder")
         .accessibilityLabel(category.name)
         .accessibilityValue(selected ? "Active" : "Inactive")
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAction(named: "Move earlier") { moveCategory(category.id, by: -1) }
+        .accessibilityAction(named: "Move later") { moveCategory(category.id, by: 1) }
     }
 
     private func paletteAction(symbol: String, title: String, action: @escaping () -> Void) -> some View {
@@ -270,9 +363,10 @@ struct ActivityCategoriesView: View {
     @State private var name = ""
     @State private var color = "blue"
     @State private var symbol = "briefcase"
+    @State private var showingSymbols = false
     @FocusState private var nameFocused: Bool
     var focusNewActivity = false
-    private let symbols = ["briefcase", "book", "house", "cup.and.saucer", "figure.walk", "music.note", "phone", "moon", "gamecontroller", "ellipsis"]
+    private let symbols = ["briefcase", "book", "house", "cup.and.saucer", "figure.walk", "music.note", "phone", "moon", "gamecontroller"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -324,12 +418,19 @@ struct ActivityCategoriesView: View {
                 ForEach(TaskTagPalette.allCases) { palette in
                     Button { color = palette.rawValue } label: {
                         Circle().fill(palette.background)
-                            .overlay { Circle().strokeBorder(color == palette.rawValue ? palette.foreground : .clear, lineWidth: 2) }
+                            .overlay {
+                                Circle().strokeBorder(color == palette.rawValue ? palette.foreground : palette.foreground.opacity(0.2),
+                                                      lineWidth: color == palette.rawValue ? 2 : 0.7)
+                            }
                             .frame(width: 26, height: 26)
                     }
                     .buttonStyle(.plain).help(palette.displayName).accessibilityLabel(palette.displayName)
                     .accessibilityValue(color == palette.rawValue ? "Selected" : "")
                 }
+            }
+            if !symbols.contains(symbol) {
+                Label("Selected icon", systemImage: symbol)
+                    .foregroundStyle(ActivityAppearance.accent(color))
             }
             HStack(spacing: 6) {
                 ForEach(symbols, id: \.self) { item in
@@ -337,6 +438,12 @@ struct ActivityCategoriesView: View {
                         .background(symbol == item ? FocusDeskStyle.selectedBackground : .clear,
                                     in: RoundedRectangle(cornerRadius: 4))
                 }
+                ActivityIconButton(symbol: "ellipsis", title: "More icons") { showingSymbols = true }
+                    .background(showingSymbols || !symbols.contains(symbol) ? FocusDeskStyle.selectedBackground : .clear,
+                                in: RoundedRectangle(cornerRadius: 4))
+                    .popover(isPresented: $showingSymbols, arrowEdge: .bottom) {
+                        ActivitySymbolPicker(selection: $symbol)
+                    }
             }
             if let error = store.errorMessage {
                 Text(error).font(.caption).foregroundStyle(.red)

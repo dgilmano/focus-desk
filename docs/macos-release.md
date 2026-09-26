@@ -99,7 +99,7 @@ Old Swift package/developer builds are unsandboxed. The new signed application's
 
 1. In the old app, use Focus Desk > Data & Backups > Export Backup. Keep an additional copy somewhere protected.
 2. Quit the old app. Launch the new app and choose Restore Backup using the exported JSON file.
-3. Verify active/completed tasks, tags, Journal, drafts and Day map history. Keep the old database and export until satisfied.
+3. Verify active/completed tasks, tags, Journal, drafts and Day tracker history. Keep the old database and export until satisfied.
 
 Do not add automatic file copying or sandbox exceptions to conceal this transition. The development app uses `.dev` and never opens the production container automatically. Preferences/account UI settings are not included in data backups.
 

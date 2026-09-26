@@ -14,6 +14,13 @@ private struct ActivityIntervalDraft: Identifiable {
     var taskTitle: String?
 }
 
+private struct ActivityResizePreview {
+    var original: ActivityIntervalSnapshot
+    var candidate: ActivityIntervalSnapshot
+    var edge: ActivityIntervalEdge
+    var day: DateInterval
+}
+
 struct ActivityDayMapView: View {
     @Environment(ActivityStore.self) private var store
     @Binding var selectedDate: Date?
@@ -22,6 +29,9 @@ struct ActivityDayMapView: View {
     @AppStorage("dayMapTimelineProportion") private var timelineProportion = ActivityDayMapSplitLayout.defaultProportion
     @State private var dividerDragStartWidth: CGFloat?
     @State private var isDividerHovered = false
+    @State private var resizePreview: ActivityResizePreview?
+    @State private var editingTimeID: UUID?
+    private let pointsPerMinute: CGFloat = 1.5
     var now: Date
     var availableWidth: CGFloat
 
@@ -29,9 +39,14 @@ struct ActivityDayMapView: View {
     private var liveNow: Date { max(now, Date()) }
     private var day: Date { selectedDate ?? liveNow }
     private var dayRange: DateInterval { Calendar.current.dateInterval(of: .day, for: day)! }
+    private var displayedIntervals: [ActivityIntervalSnapshot] {
+        store.snapshots.map { interval in
+            resizePreview?.original.id == interval.id ? resizePreview!.candidate : interval
+        }
+    }
 
     var body: some View {
-        let segments = ActivityTimeline.segments(on: day, intervals: store.snapshots, now: liveNow)
+        let segments = ActivityTimeline.segments(on: day, intervals: displayedIntervals, now: liveNow)
         let layout = ActivityDayMapSplitLayout(availableWidth: availableWidth, proportion: timelineProportion)
         VStack(alignment: .leading, spacing: 16) {
             if let notice = store.notice, Calendar.current.isDate(day, inSameDayAs: liveNow) {
@@ -65,6 +80,9 @@ struct ActivityDayMapView: View {
             ActivityIntervalEditor(draft: value)
         }
         .sheet(isPresented: $showingSettings) { ActivityCategoriesView() }
+        .onChange(of: dayRange.start) { resizePreview = nil; editingTimeID = nil }
+        .onChange(of: availableWidth) { resizePreview = nil }
+        .onDisappear { resizePreview = nil }
     }
 
     private func columnDivider(_ layout: ActivityDayMapSplitLayout) -> some View {
@@ -130,25 +148,60 @@ struct ActivityDayMapView: View {
                     .padding(.vertical, 8)
             }
 
-            LazyVStack(spacing: 0) {
-                ForEach(segments) { segment in
+            Text("Drag the top or bottom edge to adjust an interval.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+
+            VStack(spacing: 0) {
+                // A start-time edit must not destroy the row hosting the drag gesture.
+                ForEach(segments, id: \.timelineIdentity) { segment in
                     let record = segment.intervalID.flatMap { store.interval($0) }
                     let isActive = record != nil && record?.endedAt == nil && Calendar.current.isDate(day, inSameDayAs: liveNow)
                     ActivityTimelineRow(
+                        editingTimeID: $editingTimeID,
                         segment: segment, category: store.category(segment.categoryID),
                         taskTitle: record?.taskTitle, isActive: isActive,
                         isFirst: segment.id == segments.first?.id,
                         isLast: segment.id == segments.last?.id, dayEnd: dayRange.end,
-                        showsInlineRange: width >= 480
-                    ) { edit(segment) }
+                        showsInlineRange: width >= 480,
+                        rowHeight: 48 + CGFloat(segment.duration / 60) * pointsPerMinute,
+                        canResizeStart: record.map { $0.startedAt >= dayRange.start && $0.startedAt < dayRange.end } ?? false,
+                        canResizeEnd: record?.endedAt.map { $0 > dayRange.start && $0 <= dayRange.end } ?? false,
+                        isResizing: segment.intervalID != nil && resizePreview?.original.id == segment.intervalID,
+                        onResize: { edge, translation in resize(segment, edge: edge, translation: translation) },
+                        onResizeEnded: { commitResize() },
+                        onResizeCancelled: { resizePreview = nil },
+                        onEdit: { edit(segment) }
+                    )
                 }
             }
         }
     }
 
     private var balance: some View {
-        ActivityDayBalanceView(categories: store.categories, intervals: store.snapshots,
+        ActivityDayBalanceView(categories: store.categories, intervals: displayedIntervals,
                                selectedDate: $selectedDate, now: liveNow, onSelectInterval: edit)
+    }
+
+    private func resize(_ segment: ActivityDaySegment, edge: ActivityIntervalEdge, translation: CGFloat) {
+        editingTimeID = nil
+        if resizePreview == nil {
+            guard let id = segment.intervalID, let original = store.interval(id)?.snapshot else { return }
+            resizePreview = .init(original: original, candidate: original, edge: edge, day: dayRange)
+        }
+        guard var preview = resizePreview else { return }
+        let endpoint = preview.edge == .start ? preview.original.start : preview.original.end ?? liveNow
+        let requested = endpoint.addingTimeInterval(Double(translation / pointsPerMinute) * 60)
+        if let candidate = try? ActivityTimeline.resizing(preview.original, edge: preview.edge, to: requested,
+                                                        in: preview.day, among: store.snapshots, now: liveNow) {
+            preview.candidate = candidate
+            resizePreview = preview
+        }
+    }
+
+    private func commitResize() {
+        guard let preview = resizePreview else { return }
+        _ = store.resizeInterval(preview.original, to: preview.candidate)
+        resizePreview = nil
     }
 
     private func addInterval(_ segments: [ActivityDaySegment]) {
@@ -166,6 +219,12 @@ struct ActivityDayMapView: View {
         } else {
             showingSettings = true
         }
+    }
+}
+
+private extension ActivityDaySegment {
+    var timelineIdentity: String {
+        intervalID?.uuidString ?? "gap-\(start.timeIntervalSinceReferenceDate)"
     }
 }
 
