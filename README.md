@@ -10,11 +10,11 @@ Day tracker in Focus Desk 0.5.0, using demonstration data.
 
 **Light appearance**
 
-![Day tracker in light appearance, with activity cards, timeline, tracking controls and daily balance](docs/screenshots/day-tracker-light.png)
+![Day tracker in light appearance, with activity cards, timeline, tracking controls and daily balance](docs/screenshots/day-tracker-light.jpg)
 
 **Dark appearance**
 
-![Day tracker in dark appearance, with a running activity and recorded-time balance](docs/screenshots/day-tracker-dark.png)
+![Day tracker in dark appearance, with a running activity and recorded-time balance](docs/screenshots/day-tracker-dark.jpg)
 
 ## Highlights
 
