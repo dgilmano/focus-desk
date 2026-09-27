@@ -4,26 +4,24 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Focus Desk</title>
         <item>
-            <title>0.4.0</title>
-            <pubDate>Sun, 27 Sep 2026 01:00:47 +0300</pubDate>
-            <sparkle:version>4</sparkle:version>
-            <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+            <title>0.4.1</title>
+            <pubDate>Sun, 27 Sep 2026 10:12:17 +0300</pubDate>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Focus Desk 0.4.0
+            <description sparkle:format="markdown"><![CDATA[# Focus Desk 0.4.1
 
-- Day map is now called Day tracker. Drag activity cards to arrange them in your preferred order.
-- Choose from ten color swatches and an expanded, searchable icon library with recently used icons.
-- Timeline blocks reflect recorded duration. Drag their top or bottom edges to adjust start and end times with a live preview.
-- Click a time to edit it directly in the timeline: Enter saves and Escape cancels. Click an activity or linked task name to change its assignment.
-- Removed the pencil icon from recorded intervals. Additional interval options remain available with a right-click.
+- Restored compact, uniform rows in Day tracker. Row height no longer depends on recorded duration, and dragging interval edges has been removed.
+- Kept direct editing: click a time to edit it, or click an activity or linked task name to change its assignment. Enter saves and Escape cancels time edits.
+- Additional interval options remain available with a right-click, without a pencil icon.
 
 Personal preview for Apple Silicon, macOS 14 or later. This build is ad-hoc signed, not Apple Developer ID signed or notarized, and is not an App Store release. It is intended for the owner's locally installed copy. Updates verify signed metadata and archives and require saving data and creating a recovery backup before installation.
 ]]></description>
-            <enclosure url="https://github.com/dgilmano/focus-desk/releases/download/personal-v0.4.0-4/FocusDesk-0.4.0-4-arm64-personal.zip" length="2502808" type="application/octet-stream" sparkle:edSignature="5383LYS/3y7TZCEl14Uxb7kYziaFjvGj9aOLPKv9BetcanqIz/YRqOMLuX1ljyvy/CTVeSL4oIdOItaaguHBAg=="></enclosure>
+            <enclosure url="https://github.com/dgilmano/focus-desk/releases/download/personal-v0.4.1-5/FocusDesk-0.4.1-5-arm64-personal.zip" length="2478325" type="application/octet-stream" sparkle:edSignature="SkZooqEEe9AR+ptV50oHV3zefAcuNKcHFydyb8cf4fUGA3me3SO0L8icfWMAt70aJ/2HYqe06luan4p3ILvtAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: /XDgwszLP6delKLSDWd9Rb0hTk2XFVm9BeKgf/TwSVyeRMjXP+zBzQeXXk85oB4seLTljMUaO+Jj4BQa8zbdAw==
-length: 2177
+edSignature: DUOE55n9wrsUwpYPDrv3Idr/GaIbYf5kg8rhe5K647/RRpMdBZjrC8sV3Kz/djQ4oEf/Tj2xSTgbd75T5ZGoBA==
+length: 1982
 -->
