@@ -1,4 +1,3 @@
-import AppKit
 import FocusDeskCore
 import SwiftUI
 
@@ -13,13 +12,6 @@ struct ActivityTimelineRow: View {
     var isLast: Bool
     var dayEnd: Date
     var showsInlineRange: Bool
-    var rowHeight: CGFloat = 48
-    var canResizeStart = false
-    var canResizeEnd = false
-    var isResizing = false
-    var onResize: (ActivityIntervalEdge, CGFloat) -> Void = { _, _ in }
-    var onResizeEnded: () -> Void = {}
-    var onResizeCancelled: () -> Void = {}
     var onEdit: () -> Void
     @State private var isHovered = false
     @State private var timeDraft: ActivityIntervalSnapshot?
@@ -45,7 +37,7 @@ struct ActivityTimelineRow: View {
                 Circle().fill(accent).frame(width: 8, height: 8)
                     .background { Circle().fill(ActivityAppearance.canvas).frame(width: 12, height: 12) }
             }
-            .frame(width: 12, height: rowHeight)
+            .frame(width: 12, height: 48)
             .accessibilityHidden(true)
 
             Group {
@@ -59,7 +51,7 @@ struct ActivityTimelineRow: View {
                 }
             }
             .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: max(44, rowHeight - 4))
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background(background, in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
@@ -69,12 +61,6 @@ struct ActivityTimelineRow: View {
         .onHover { isHovered = $0 }
         .onChange(of: editingTimeID) {
             if editingTimeID != segment.intervalID { timeDraft = nil }
-        }
-        .overlay(alignment: .top) {
-            if canResizeStart && timeDraft == nil { resizeHandle(.start) }
-        }
-        .overlay(alignment: .bottom) {
-            if canResizeEnd && timeDraft == nil { resizeHandle(.end) }
         }
     }
 
@@ -148,19 +134,9 @@ struct ActivityTimelineRow: View {
     }
 
     private var background: Color {
-        if isActive || isResizing { return accent.opacity(0.1) }
+        if isActive { return accent.opacity(0.1) }
         if isHovered { return FocusDeskStyle.focusSurface }
-        return segment.intervalID == nil ? .clear : accent.opacity(0.04)
-    }
-
-    private func resizeHandle(_ edge: ActivityIntervalEdge) -> some View {
-        ActivityIntervalResizeHandle(
-            title: edge == .start ? "Adjust start time" : "Adjust end time",
-            value: edge == .start ? start : end,
-            accent: accent, emphasized: isHovered || isResizing,
-            onChange: { onResize(edge, $0) }, onEnd: onResizeEnded, onCancel: onResizeCancelled
-        )
-        .padding(.leading, 76)
+        return .clear
     }
 
     private var timeRange: some View {
@@ -171,53 +147,5 @@ struct ActivityTimelineRow: View {
         }
         .help("Edit start and end time")
         .accessibilityLabel("Edit time: \(start) to \(end)")
-    }
-}
-
-private struct ActivityIntervalResizeHandle: View {
-    var title: String
-    var value: String
-    var accent: Color
-    var emphasized: Bool
-    var onChange: (CGFloat) -> Void
-    var onEnd: () -> Void
-    var onCancel: () -> Void
-    @State private var isHovered = false
-    @GestureState private var isDragging = false
-
-    var body: some View {
-        Rectangle().fill(Color.primary.opacity(0.001))
-            .frame(height: 12)
-            .overlay {
-                Capsule().fill(accent.opacity(isHovered || emphasized ? 0.8 : 0.3))
-                    .frame(width: 28, height: 3)
-            }
-            .contentShape(Rectangle())
-            .onHover { hovered in
-                guard hovered != isHovered else { return }
-                isHovered = hovered
-                if hovered { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
-            }
-            .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .global)
-                .updating($isDragging) { _, active, _ in active = true }
-                .onChanged { onChange($0.translation.height) }
-                .onEnded { _ in onEnd() })
-            .onChange(of: isDragging) { if !isDragging { onCancel() } }
-            .onDisappear {
-                if isHovered { NSCursor.pop(); isHovered = false }
-                if isDragging { onCancel() }
-            }
-            .help("\(title) · drag to resize, one-minute steps")
-            .accessibilityElement()
-            .accessibilityLabel(title)
-            .accessibilityValue(value)
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: onChange(1.5)
-                case .decrement: onChange(-1.5)
-                @unknown default: return
-                }
-                onEnd()
-            }
     }
 }
