@@ -33,7 +33,11 @@ struct ActivityDayBalanceView: View {
         return "\(range.start.formatted(.dateTime.day().month(.abbreviated).year())) – \(lastDay.formatted(.dateTime.day().month(.abbreviated).year()))"
     }
 
-    private var recordedCategories: [ActivityCategory] { categories.filter { totals[$0.id, default: 0] > 0 } }
+    private var recordedCategories: [ActivityCategory] {
+        let durations = totals
+        return categories.filter { durations[$0.id, default: 0] > 0 }
+            .sorted { durations[$0.id, default: 0] > durations[$1.id, default: 0] }
+    }
     private var recorded: TimeInterval { totals.values.reduce(0, +) }
     private var untracked: TimeInterval {
         segments.filter { $0.intervalID == nil }.reduce(0) { $0 + $1.duration }
