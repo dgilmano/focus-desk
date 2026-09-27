@@ -4,24 +4,26 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Focus Desk</title>
         <item>
-            <title>0.4.1</title>
-            <pubDate>Sun, 27 Sep 2026 10:12:17 +0300</pubDate>
-            <sparkle:version>5</sparkle:version>
-            <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+            <title>0.5.0</title>
+            <pubDate>Sun, 27 Sep 2026 15:26:02 +0300</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Focus Desk 0.4.1
+            <description sparkle:format="markdown"><![CDATA[# Focus Desk 0.5.0
 
-- Restored compact, uniform rows in Day tracker. Row height no longer depends on recorded duration, and dragging interval edges has been removed.
-- Kept direct editing: click a time to edit it, or click an activity or linked task name to change its assignment. Enter saves and Escape cancels time edits.
-- Additional interval options remain available with a right-click, without a pencil icon.
+- Start tracking opens a working session; Stop tracking ends the session and its running activity. Activity timers only start after Start tracking. Click the selected activity again to pause its timer.
+- Untracked now counts only gaps within working sessions in daily, weekly and monthly balances. Time outside sessions, including overnight time, is excluded. Sleep and app exit stop tracking; recovery closes unfinished sessions at their last saved checkpoint.
+- Day tracker now starts with a prominent, left-aligned Start tracking button, followed by the activity chooser and a compact timeline. Start and Stop buttons match activity-card widths; Stop uses the Leisure color.
+- Click a timeline row for immediate selection; double-click to edit time, activity or linked task. Removed the Add interval button and corrected time-column alignment.
+- Tracking sessions are included in backups. Existing tasks, Journal, drafts, tags and activity history are preserved during migration. Older backups remain importable; old activity history is shown without inventing working-session boundaries.
 
 Personal preview for Apple Silicon, macOS 14 or later. This build is ad-hoc signed, not Apple Developer ID signed or notarized, and is not an App Store release. It is intended for the owner's locally installed copy. Updates verify signed metadata and archives and require saving data and creating a recovery backup before installation.
 ]]></description>
-            <enclosure url="https://github.com/dgilmano/focus-desk/releases/download/personal-v0.4.1-5/FocusDesk-0.4.1-5-arm64-personal.zip" length="2478325" type="application/octet-stream" sparkle:edSignature="SkZooqEEe9AR+ptV50oHV3zefAcuNKcHFydyb8cf4fUGA3me3SO0L8icfWMAt70aJ/2HYqe06luan4p3ILvtAQ=="></enclosure>
+            <enclosure url="https://github.com/dgilmano/focus-desk/releases/download/personal-v0.5.0-6/FocusDesk-0.5.0-6-arm64-personal.zip" length="2512317" type="application/octet-stream" sparkle:edSignature="jLs+WunjjRGuKEqwtMJK55ITonwqaM46zbupQbcM7HfzF8pMqnL+ZGuFxwGU40SwkQlnFt/dox7O9Z3qUM56BA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: DUOE55n9wrsUwpYPDrv3Idr/GaIbYf5kg8rhe5K647/RRpMdBZjrC8sV3Kz/djQ4oEf/Tj2xSTgbd75T5ZGoBA==
-length: 1982
+edSignature: ceUwpLihIvL8+1+nef/o8B6V/Wm8CJnQCtJq4v1WeZ4DsUfOSM8hZjN5KKdwpipGfOBBfmLJPpR2vxECMF6ICQ==
+length: 2680
 -->
