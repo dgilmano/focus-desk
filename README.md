@@ -4,6 +4,18 @@ Focus Desk is a native SwiftUI macOS app for focusing on one long-running task a
 
 Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds are not supported. The current priority is a personal, locally installed application with signed GitHub updates. Public notarized distribution and the Mac App Store are later milestones.
 
+## Screenshots
+
+Day tracker in Focus Desk 0.5.0, using demonstration data.
+
+**Light appearance**
+
+![Day tracker in light appearance, with activity cards, timeline, tracking controls and daily balance](docs/screenshots/day-tracker-light.png)
+
+**Dark appearance**
+
+![Day tracker in dark appearance, with a running activity and recorded-time balance](docs/screenshots/day-tracker-dark.png)
+
 ## Highlights
 
 - Native SwiftUI macOS application.
@@ -26,9 +38,9 @@ Supported release platform: **Apple Silicon, macOS 14 or later**. Intel builds a
 
 ## Activity
 
-Activity records local start/end timestamps independently of tasks and journal entries. Selecting the active category again is a no-op. Switching categories closes the previous interval and starts the next in one save. Category archival preserves historical intervals.
+Activity records local start/end timestamps independently of tasks and journal entries. Selecting the active category again pauses its timer while leaving the working session open. Switching categories closes the previous interval and starts the next in one save. Category archival preserves historical intervals.
 
-Sleep and normal application quit pause recording. While running, the application saves a checkpoint every 30 seconds. Following an unexpected exit, the unfinished interval is closed at that checkpoint; time while the app was unavailable is left untracked. Activity does not infer computer usage or pause when the mouse is idle. Day boundaries use the current local calendar, including daylight-saving transitions.
+Sleep and normal application quit stop the working session and its running activity. While running, the application saves a checkpoint every 30 seconds. Following an unexpected exit, the unfinished interval is closed at that checkpoint; time while the app was unavailable is excluded from Untracked. Activity does not infer computer usage or pause when the mouse is idle. Day boundaries use the current local calendar, including daylight-saving transitions.
 
 The existing tag chart remains an estimate from Journal entries; it is not combined with the measured Activity totals. Task links on activity intervals are optional and do not follow task navigation automatically.
 
