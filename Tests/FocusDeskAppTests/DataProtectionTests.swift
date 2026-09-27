@@ -15,6 +15,7 @@ final class DataProtectionTests: XCTestCase {
         let task = populatedTask()
         XCTAssertTrue(session.tasks.create(task))
         task.localDraft = "Unsubmitted work must survive the update"
+        XCTAssertTrue(session.activity.startTracking(at: Date().addingTimeInterval(-60)))
         XCTAssertTrue(session.activity.start(session.activity.categories[0].id, at: Date().addingTimeInterval(-60)))
         try session.prepareForUpdate()
         XCTAssertNil(session.activity.activeInterval)
@@ -193,12 +194,14 @@ final class DataProtectionTests: XCTestCase {
         let session = WorkspaceSession(container: container, backupDirectory: directory, observeLifecycle: false)
         let start = Date().addingTimeInterval(-1000)
         let checkpoint = start.addingTimeInterval(300)
+        XCTAssertTrue(session.activity.startTracking(at: start))
         XCTAssertTrue(session.activity.start(session.activity.categories[0].id, at: start))
         session.activity.checkpoint(at: checkpoint)
         let backup = try session.backups.snapshot()
         try session.restore(backup)
         XCTAssertNil(session.activity.activeInterval)
         XCTAssertEqual(session.activity.intervals.first?.endedAt, checkpoint)
+        XCTAssertTrue(session.activity.startTracking())
         XCTAssertTrue(session.activity.start(session.activity.categories[1].id))
         XCTAssertEqual(session.activity.intervals.count, 2)
     }
@@ -313,6 +316,7 @@ final class DataProtectionTests: XCTestCase {
         let session = WorkspaceSession(container: container, backupDirectory: directory, observeLifecycle: false)
         let task = populatedTask()
         XCTAssertTrue(session.tasks.create(task))
+        XCTAssertTrue(session.activity.startTracking())
         XCTAssertTrue(session.activity.start(session.activity.categories[0].id))
         let old = try session.exportSnapshot()
         task.localDraft = "Unsaved rescue text"
@@ -352,6 +356,7 @@ final class DataProtectionTests: XCTestCase {
         for _ in 0..<22 { try session.backups.safetyCopy() }
         XCTAssertEqual(try session.backups.files().count, 20)
         let date = Date().addingTimeInterval(-100)
+        XCTAssertTrue(session.activity.startTracking(at: date))
         XCTAssertTrue(session.activity.start(session.activity.categories[0].id, at: date))
         var backup = try session.backups.snapshot()
         backup.intervals[0].endedAt = date.addingTimeInterval(-1)

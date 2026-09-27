@@ -37,13 +37,13 @@ final class WorkspaceSession {
     }
 
     func prepareToQuit() -> Bool {
-        guard tasks.save(), activity.pause() else { return false }
+        guard tasks.save(), activity.stopTracking() else { return false }
         backups.flush()
         return true
     }
 
     func prepareForUpdate() throws {
-        guard tasks.save(), activity.pause() else { throw UpdatePreparationError.saveFailed }
+        guard tasks.save(), activity.stopTracking() else { throw UpdatePreparationError.saveFailed }
         try backups.safetyCopy()
         backups.flush()
     }
@@ -54,6 +54,7 @@ final class WorkspaceSession {
         let committed = try backups.snapshot()
         snapshot.categories = committed.categories
         snapshot.intervals = committed.intervals
+        snapshot.trackingSessions = committed.trackingSessions
         return try snapshot.validated()
     }
 }

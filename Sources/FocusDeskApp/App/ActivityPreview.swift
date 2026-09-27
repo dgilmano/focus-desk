@@ -34,6 +34,7 @@ enum ActivityPreview {
                                    taskTitle: name == "Work" ? task.title : nil)
         }
         if let work = store.categories.first(where: { $0.name == "Work" }) {
+            store.startTracking(at: start)
             store.start(work.id, at: start.addingTimeInterval(available * 330 / 420))
         }
     }

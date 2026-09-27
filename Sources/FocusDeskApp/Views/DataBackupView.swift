@@ -73,7 +73,7 @@ struct DataBackupView: View {
             }
         } message: {
             if let backup = pendingBackup {
-                Text("This backup contains \(backup.tasks.count) tasks, \(backup.entries.count) journal entries and \(backup.intervals.count) activity intervals. Current data will be replaced after a recovery copy is saved. Active recording will stop.")
+                Text("This backup contains \(backup.tasks.count) tasks, \(backup.entries.count) journal entries \(backup.intervals.count) activity intervals and \((backup.trackingSessions ?? []).count) tracking sessions. Current data will be replaced after a recovery copy is saved. Active recording will stop.")
             }
         }
     }

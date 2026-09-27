@@ -817,7 +817,7 @@ struct MainDeskView: View {
     private var toolbarSubtitle: String {
         switch selectedSection {
         case .dayMap:
-            return activityStore.activeCategory.map { "Current activity: \($0.name)" } ?? "Not tracking"
+            return activityStore.activeCategory.map { "Current activity: \($0.name)" } ?? activityStore.inactiveTrackingLabel
         case .newTask:
             return "Create a focused task"
         case .tasks:

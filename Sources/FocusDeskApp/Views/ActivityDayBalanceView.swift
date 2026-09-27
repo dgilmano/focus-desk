@@ -5,6 +5,7 @@ import SwiftUI
 struct ActivityDayBalanceView: View {
     var categories: [ActivityCategory]
     var intervals: [ActivityIntervalSnapshot]
+    var trackingWindows: [DateInterval]
     @Binding var selectedDate: Date?
     var now: Date
     var onSelectInterval: (ActivityDaySegment) -> Void
@@ -15,7 +16,7 @@ struct ActivityDayBalanceView: View {
         period.range(containing: day) ?? DateInterval(start: day, duration: 0)
     }
     private var segments: [ActivityDaySegment] {
-        ActivityTimeline.segments(in: range, intervals: intervals, now: now)
+        ActivityTimeline.trackedSegments(in: range, intervals: intervals, windows: trackingWindows, now: now)
     }
     private var totals: [UUID: TimeInterval] { ActivityTimeline.totals(for: segments) }
     private var dayEnd: Date { range.end }

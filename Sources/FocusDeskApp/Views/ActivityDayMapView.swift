@@ -22,7 +22,7 @@ struct ActivityDayMapView: View {
     @AppStorage("dayMapTimelineProportion") private var timelineProportion = ActivityDayMapSplitLayout.defaultProportion
     @State private var dividerDragStartWidth: CGFloat?
     @State private var isDividerHovered = false
-    @State private var editingTimeID: UUID?
+    @State private var selectedSegmentID: String?
     var now: Date
     var availableWidth: CGFloat
 
@@ -30,10 +30,27 @@ struct ActivityDayMapView: View {
     private var liveNow: Date { max(now, Date()) }
     private var day: Date { selectedDate ?? liveNow }
     private var dayRange: DateInterval { Calendar.current.dateInterval(of: .day, for: day)! }
+    private var trackingButtonWidth: CGFloat {
+        ActivityPaletteLayout.cardWidth(availableWidth: availableWidth, categoryCount: store.availableCategories.count)
+    }
+    private var stopTrackingColor: Color {
+        ActivityAppearance.accent(store.categories.first { $0.name.caseInsensitiveCompare("Leisure") == .orderedSame }?.colorName ?? "pink")
+    }
     var body: some View {
-        let segments = ActivityTimeline.segments(on: day, intervals: store.snapshots, now: liveNow)
+        let segments = ActivityTimeline.trackedSegments(in: dayRange, intervals: store.snapshots,
+                                                        windows: store.trackingWindows(now: liveNow), now: liveNow)
         let layout = ActivityDayMapSplitLayout(availableWidth: availableWidth, proportion: timelineProportion)
         VStack(alignment: .leading, spacing: 16) {
+            timelineHeader
+                .padding(.bottom, 8)
+            VStack(alignment: .leading, spacing: 12) {
+                ActivityPaletteView(availableWidth: availableWidth)
+                Rectangle()
+                    .fill(FocusDeskStyle.hairline)
+                    .frame(height: 1)
+            }
+            .padding(.bottom, 12)
+
             if let notice = store.notice, Calendar.current.isDate(day, inSameDayAs: liveNow) {
                 Text(notice).font(.system(size: 12)).foregroundStyle(.secondary)
             }
@@ -65,7 +82,51 @@ struct ActivityDayMapView: View {
             ActivityIntervalEditor(draft: value)
         }
         .sheet(isPresented: $showingSettings) { ActivityCategoriesView() }
-        .onChange(of: dayRange.start) { editingTimeID = nil }
+        .onChange(of: dayRange.start) { selectedSegmentID = nil }
+    }
+
+    private var timelineHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Day timeline").font(.system(size: 17, weight: .semibold))
+                Spacer()
+
+            }
+            .frame(height: 28)
+
+            if Calendar.current.isDate(day, inSameDayAs: liveNow) {
+                VStack(alignment: .leading, spacing: 24) {
+                    if store.activeTrackingSession != nil {
+                        Label {
+                            Text("Tracking started")
+                        } icon: {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.green)
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.horizontal, 12)
+                        .frame(width: trackingButtonWidth, height: 44, alignment: .leading)
+                        .background(FocusDeskStyle.focusSurface, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(FocusDeskStyle.hairline, lineWidth: 1)
+                        }
+                        .accessibilityLabel("Tracking started")
+                    } else {
+                        Button { _ = store.startTracking() } label: {
+                            Label("Start tracking", systemImage: "play.fill")
+                        }
+                        .buttonStyle(ActivityTrackingButtonStyle(tint: .blue, width: trackingButtonWidth))
+                        .help("Start your day, then choose an activity")
+                    }
+                    ActivityTrackingStatus()
+                        .padding(.leading, 12)
+                }
+            }
+
+        }
     }
 
     private func columnDivider(_ layout: ActivityDayMapSplitLayout) -> some View {
@@ -117,14 +178,6 @@ struct ActivityDayMapView: View {
 
     private func timeline(_ segments: [ActivityDaySegment], width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Day timeline").font(.system(size: 17, weight: .semibold))
-                Spacer()
-                ActivityIconButton(symbol: "plus", title: "Add interval") { addInterval(segments) }
-                    .disabled(store.availableCategories.isEmpty || !segments.contains { $0.intervalID == nil })
-            }
-            .frame(height: 28)
-
             if !segments.contains(where: { $0.intervalID != nil }) {
                 Text("No activity recorded for this day.")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
@@ -137,7 +190,8 @@ struct ActivityDayMapView: View {
                     let record = segment.intervalID.flatMap { store.interval($0) }
                     let isActive = record != nil && record?.endedAt == nil && Calendar.current.isDate(day, inSameDayAs: liveNow)
                     ActivityTimelineRow(
-                        editingTimeID: $editingTimeID,
+                        isSelected: selectedSegmentID == segment.timelineIdentity,
+                        onSelect: { selectedSegmentID = segment.timelineIdentity },
                         segment: segment, category: store.category(segment.categoryID),
                         taskTitle: record?.taskTitle, isActive: isActive,
                         isFirst: segment.id == segments.first?.id,
@@ -147,17 +201,30 @@ struct ActivityDayMapView: View {
                     )
                 }
             }
+            if Calendar.current.isDate(day, inSameDayAs: liveNow) {
+                Button { _ = store.stopTracking() } label: {
+                    Label("Stop tracking", systemImage: "stop.fill")
+                }
+                .buttonStyle(ActivityTrackingButtonStyle(tint: stopTrackingColor, width: trackingButtonWidth))
+                .disabled(store.activeTrackingSession == nil && store.activeInterval == nil)
+            }
+            if let active = store.activeTrackingSession, Calendar.current.isDate(day, inSameDayAs: liveNow) {
+                Text("Tracking since \(active.startedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            } else if let last = store.trackingSessions.last(where: {
+                $0.startedAt < dayRange.end && ($0.endedAt ?? liveNow) > dayRange.start
+            }), let end = last.endedAt {
+                Text("Tracking stopped at \(end.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+
         }
     }
 
     private var balance: some View {
         ActivityDayBalanceView(categories: store.categories, intervals: store.snapshots,
+                               trackingWindows: store.trackingWindows(now: liveNow),
                                selectedDate: $selectedDate, now: liveNow, onSelectInterval: edit)
-    }
-
-    private func addInterval(_ segments: [ActivityDaySegment]) {
-        guard let gap = segments.last(where: { $0.intervalID == nil }) else { return }
-        edit(gap)
     }
 
     private func edit(_ segment: ActivityDaySegment) {
@@ -170,6 +237,26 @@ struct ActivityDayMapView: View {
         } else {
             showingSettings = true
         }
+    }
+}
+
+private struct ActivityTrackingButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    var tint: Color
+    var width: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(isEnabled ? Color.white : Color.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 12)
+            .frame(width: width, height: 44, alignment: .leading)
+            .background(isEnabled ? tint.opacity(configuration.isPressed ? 0.8 : 1) : FocusDeskStyle.focusSurface,
+                        in: RoundedRectangle(cornerRadius: 10))
+            .shadow(color: .black.opacity(configuration.isPressed || !isEnabled ? 0 : 0.12), radius: 3, y: 2)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

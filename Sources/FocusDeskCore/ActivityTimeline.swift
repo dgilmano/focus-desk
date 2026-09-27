@@ -160,6 +160,26 @@ public enum ActivityTimeline {
         return result
     }
 
+    /// Preserve all recorded activity; gaps count only inside explicitly tracked sessions.
+    public static func trackedSegments(
+        in range: DateInterval, intervals: [ActivityIntervalSnapshot], windows: [DateInterval], now: Date
+    ) -> [ActivityDaySegment] {
+        var merged: [DateInterval] = []
+        for window in windows.sorted(by: { $0.start < $1.start }) where window.end > window.start {
+            if let last = merged.last, window.start <= last.end {
+                merged[merged.count - 1] = DateInterval(start: last.start, end: max(last.end, window.end))
+            } else { merged.append(window) }
+        }
+        return segments(in: range, intervals: intervals, now: now).flatMap { segment in
+            if segment.intervalID != nil { return [segment] }
+            return merged.compactMap { window in
+                let start = max(segment.start, window.start), end = min(segment.end, window.end)
+                guard end > start else { return nil }
+                return ActivityDaySegment(intervalID: nil, categoryID: nil, start: start, end: end)
+            }
+        }
+    }
+
     public static func totals(for segments: [ActivityDaySegment]) -> [UUID: TimeInterval] {
         segments.reduce(into: [:]) { result, segment in
             if let categoryID = segment.categoryID {

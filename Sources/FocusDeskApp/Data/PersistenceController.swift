@@ -1,23 +1,31 @@
 import Foundation
 import SwiftData
 
-// Freeze these definitions and their models when introducing a new schema version.
+// Historical schemas use frozen model definitions.
 enum FocusDeskSchemaV1: VersionedSchema {
     static var versionIdentifier: Schema.Version { .init(1, 0, 0) }
-    static var models: [any PersistentModel.Type] { [FocusTask.self, ProgressEntry.self] }
+    static var models: [any PersistentModel.Type] { [HistoricalModels.FocusTask.self, HistoricalModels.ProgressEntry.self] }
 }
 
 enum FocusDeskSchemaV2: VersionedSchema {
     static var versionIdentifier: Schema.Version { .init(2, 0, 0) }
     static var models: [any PersistentModel.Type] {
-        [FocusTask.self, ProgressEntry.self, ActivityCategory.self, ActivityInterval.self]
+        [HistoricalModels.FocusTask.self, HistoricalModels.ProgressEntry.self, HistoricalModels.ActivityCategory.self, HistoricalModels.ActivityInterval.self]
+    }
+}
+
+enum FocusDeskSchemaV3: VersionedSchema {
+    static var versionIdentifier: Schema.Version { .init(3, 0, 0) }
+    static var models: [any PersistentModel.Type] {
+        [FocusTask.self, ProgressEntry.self, ActivityCategory.self, ActivityInterval.self, TrackingSession.self]
     }
 }
 
 enum FocusDeskMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [FocusDeskSchemaV1.self, FocusDeskSchemaV2.self] }
+    static var schemas: [any VersionedSchema.Type] { [FocusDeskSchemaV1.self, FocusDeskSchemaV2.self, FocusDeskSchemaV3.self] }
     static var stages: [MigrationStage] {
-        [.lightweight(fromVersion: FocusDeskSchemaV1.self, toVersion: FocusDeskSchemaV2.self)]
+        [.lightweight(fromVersion: FocusDeskSchemaV1.self, toVersion: FocusDeskSchemaV2.self),
+         .lightweight(fromVersion: FocusDeskSchemaV2.self, toVersion: FocusDeskSchemaV3.self)]
     }
 }
 
@@ -27,7 +35,7 @@ enum PersistenceController {
 
     @MainActor
     static func makeModelContainer(inMemory: Bool = false, at storeURL: URL? = nil) throws -> ModelContainer {
-        let schema = Schema(versionedSchema: FocusDeskSchemaV2.self)
+        let schema = Schema(versionedSchema: FocusDeskSchemaV3.self)
         let configuration: ModelConfiguration
         if let storeURL {
             configuration = ModelConfiguration(storeName, schema: schema, url: storeURL)

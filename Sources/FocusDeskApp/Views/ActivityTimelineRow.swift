@@ -2,8 +2,8 @@ import FocusDeskCore
 import SwiftUI
 
 struct ActivityTimelineRow: View {
-    @Environment(ActivityStore.self) private var store
-    @Binding var editingTimeID: UUID?
+    var isSelected: Bool
+    var onSelect: () -> Void
     var segment: ActivityDaySegment
     var category: ActivityCategory?
     var taskTitle: String?
@@ -14,7 +14,6 @@ struct ActivityTimelineRow: View {
     var showsInlineRange: Bool
     var onEdit: () -> Void
     @State private var isHovered = false
-    @State private var timeDraft: ActivityIntervalSnapshot?
 
     private var accent: Color { ActivityAppearance.accent(category?.colorName ?? "gray") }
     private var name: String { category?.name ?? "Untracked" }
@@ -23,12 +22,9 @@ struct ActivityTimelineRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: editTime) {
-                Text(start)
-                    .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
-                    .frame(width: 48, alignment: .leading)
-            }
-            .help("Edit start and end time")
+            Text(start)
+                .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
+                .frame(width: 48, alignment: .leading)
 
             ZStack {
                 Rectangle().fill(accent.opacity(0.45)).frame(width: 2)
@@ -40,28 +36,33 @@ struct ActivityTimelineRow: View {
             .frame(width: 12, height: 48)
             .accessibilityHidden(true)
 
-            Group {
-                if let timeDraft {
-                    ActivityInlineTimeEditor(original: timeDraft) {
-                        self.timeDraft = nil
-                        editingTimeID = nil
-                    }
-                } else {
-                    intervalContent
-                }
-            }
+            intervalContent
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(background, in: RoundedRectangle(cornerRadius: 5))
+            .overlay {
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.7) : .clear, lineWidth: 1)
+            }
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            onSelect()
+            onEdit()
+        }
+        // Select on press without waiting for the double-click recognition window.
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in
+            if !isSelected { onSelect() }
+        })
+        .help("Click to select · double-click to edit")
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction { onSelect() }
+        .accessibilityAction(named: "Edit interval") { onSelect(); onEdit() }
         .contextMenu {
             Button(segment.intervalID == nil ? "Fill untracked time" : "Edit interval…", action: onEdit)
         }
         .onHover { isHovered = $0 }
-        .onChange(of: editingTimeID) {
-            if editingTimeID != segment.intervalID { timeDraft = nil }
-        }
     }
 
     private var intervalContent: some View {
@@ -70,9 +71,9 @@ struct ActivityTimelineRow: View {
                 .font(.system(size: 15)).foregroundStyle(accent)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 4) {
-                activityName
-                if let taskTitle, let id = segment.intervalID {
-                    ActivityIntervalTaskMenu(intervalID: id, title: taskTitle)
+                Text(name).font(.system(size: 12)).lineLimit(1)
+                if let taskTitle {
+                    Text(taskTitle).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if !showsInlineRange {
                     timeRange
@@ -86,66 +87,28 @@ struct ActivityTimelineRow: View {
                 .font(.system(size: 11, weight: isActive ? .medium : .regular))
                 .monospacedDigit().fixedSize()
                 .frame(width: 74, alignment: .trailing)
-            if segment.intervalID == nil {
-                Button(action: onEdit) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                        .opacity(isHovered ? 1 : 0)
-                        .frame(width: 16, height: 24)
+            // Reserve the same trailing space for gaps, running and completed intervals.
+            ZStack {
+                Color.clear
+                if isActive {
+                    Circle().fill(accent).frame(width: 6, height: 6)
+                        .accessibilityLabel("Activity is running")
                 }
-                .help("Fill untracked time")
-                .accessibilityLabel("Fill untracked time")
-            } else if isActive {
-                Circle().fill(accent).frame(width: 6, height: 6)
-                    .accessibilityLabel("Activity is running")
             }
+            .frame(width: 16, height: 24)
         }
-    }
-
-    @ViewBuilder private var activityName: some View {
-        if let id = segment.intervalID {
-            Menu {
-                ForEach(store.categories.filter { !$0.isArchived || $0.id == category?.id }) { choice in
-                    Button {
-                        guard let record = store.interval(id), record.categoryID != choice.id else { return }
-                        _ = store.saveInterval(id: id, categoryID: choice.id, start: record.startedAt,
-                                               end: record.endedAt, taskID: record.taskID, taskTitle: record.taskTitle)
-                    } label: {
-                        Label(choice.name, systemImage: choice.id == category?.id ? "checkmark" : choice.symbol)
-                    }
-                }
-            } label: {
-                Text(name).font(.system(size: 12)).lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .help("Change activity for this interval")
-            .accessibilityLabel("Activity: \(name)")
-        } else {
-            Button(action: onEdit) { Text(name).font(.system(size: 12)).lineLimit(1) }
-        }
-    }
-
-    private func editTime() {
-        guard let id = segment.intervalID, let record = store.interval(id) else { onEdit(); return }
-        timeDraft = record.snapshot
-        editingTimeID = id
     }
 
     private var background: Color {
+        if isSelected { return Color.accentColor.opacity(0.1) }
         if isActive { return accent.opacity(0.1) }
         if isHovered { return FocusDeskStyle.focusSurface }
         return .clear
     }
 
     private var timeRange: some View {
-        Button(action: editTime) {
-            Text("\(start) - \(end)")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .monospacedDigit().lineLimit(1)
-        }
-        .help("Edit start and end time")
-        .accessibilityLabel("Edit time: \(start) to \(end)")
+        Text("\(start) - \(end)")
+            .font(.system(size: 10)).foregroundStyle(.secondary)
+            .monospacedDigit().lineLimit(1)
     }
 }

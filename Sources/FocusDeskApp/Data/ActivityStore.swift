@@ -8,22 +8,27 @@ import SwiftData
 final class ActivityStore {
     private(set) var categories: [ActivityCategory] = []
     private(set) var intervals: [ActivityInterval] = []
+    private(set) var trackingSessions: [TrackingSession] = []
     var errorMessage: String?
     private(set) var notice: String?
     @ObservationIgnored private var context: ModelContext
     @ObservationIgnored private let container: ModelContainer
     @ObservationIgnored private let didSave: () -> Void
+    @ObservationIgnored private let saveChanges: (ModelContext) throws -> Void
     @ObservationIgnored private let beforeDeletion: () throws -> Void
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     var availableCategories: [ActivityCategory] { categories.filter { !$0.isArchived } }
     var activeInterval: ActivityInterval? { intervals.first { $0.endedAt == nil } }
+    var inactiveTrackingLabel: String { "Choose an Activity" }
     var activeCategory: ActivityCategory? { category(activeInterval?.categoryID) }
     var snapshots: [ActivityIntervalSnapshot] { intervals.map(\.snapshot) }
 
     init(container: ModelContainer, observeLifecycle: Bool = true,
-         didSave: @escaping () -> Void = {}, beforeDeletion: @escaping () throws -> Void = {}) {
+         didSave: @escaping () -> Void = {}, beforeDeletion: @escaping () throws -> Void = {},
+         saveChanges: @escaping (ModelContext) throws -> Void = { try $0.save() }) {
+        self.saveChanges = saveChanges
         self.container = container
         self.didSave = didSave
         self.beforeDeletion = beforeDeletion
@@ -46,7 +51,10 @@ final class ActivityStore {
                 interval.endedAt = max(interval.startedAt, min(Date(), interval.lastObservedAt))
                 notice = "Previous activity saved. Choose an activity to resume."
             }
-            try context.save()
+            for session in trackingSessions where session.endedAt == nil {
+                session.endedAt = max(session.startedAt, min(Date(), session.lastObservedAt))
+            }
+            try saveChanges(context)
             try reload()
             didSave()
         } catch {
@@ -56,12 +64,55 @@ final class ActivityStore {
         if observeLifecycle { observeApplicationLifecycle() }
     }
 
+    var activeTrackingSession: TrackingSession? { trackingSessions.first { $0.endedAt == nil } }
+
+    func trackingWindows(now: Date) -> [DateInterval] {
+        trackingSessions.map { DateInterval(start: $0.startedAt, end: max($0.startedAt, $0.endedAt ?? now)) }
+    }
+
+    @discardableResult
+    func startTracking(at now: Date = Date()) -> Bool {
+        guard activeTrackingSession == nil else { return true }
+        return commit { try beginTracking(at: now) }
+    }
+
+    private func beginTracking(at now: Date) throws {
+        guard activeTrackingSession == nil else { return }
+        guard !trackingSessions.contains(where: { ($0.endedAt ?? .distantFuture) > now }) else {
+            throw ActivityValidationError.overlap
+        }
+        context.insert(TrackingSession(start: now))
+    }
+
+    @discardableResult
+    func stopTracking(at now: Date = Date(), reason: String? = nil) -> Bool {
+        guard activeTrackingSession != nil || activeInterval != nil else { return true }
+        return commit {
+            if let active = activeInterval {
+                active.endedAt = max(active.startedAt, now)
+                active.lastObservedAt = active.endedAt!
+            }
+            if let session = activeTrackingSession {
+                session.endedAt = max(session.startedAt, now)
+                session.lastObservedAt = session.endedAt!
+            }
+            notice = reason
+        }
+    }
+
     func category(_ id: UUID?) -> ActivityCategory? { categories.first { $0.id == id } }
     func interval(_ id: UUID) -> ActivityInterval? { intervals.first { $0.id == id } }
 
     @discardableResult
+    func toggleActivity(_ categoryID: UUID, at now: Date = Date()) -> Bool {
+        if activeInterval?.categoryID == categoryID { return pause(at: now) }
+        return start(categoryID, at: now)
+    }
+
+    @discardableResult
     func start(_ categoryID: UUID, at now: Date = Date()) -> Bool {
-        guard let category = category(categoryID), !category.isArchived else { return false }
+        guard let session = activeTrackingSession, now >= session.startedAt,
+              let category = category(categoryID), !category.isArchived else { return false }
         guard activeInterval?.categoryID != categoryID else { return true }
         return commit {
             if let activeInterval {
@@ -190,27 +241,43 @@ final class ActivityStore {
     }
 
     func checkpoint(at date: Date = Date()) {
-        guard let activeInterval else { return }
-        do {
-            activeInterval.lastObservedAt = max(activeInterval.startedAt, date)
-            try context.save()
-            didSave()
-        } catch {
-            context.rollback()
-            errorMessage = error.localizedDescription
+        guard activeInterval != nil || activeTrackingSession != nil else { return }
+        _ = commit {
+            if let activeInterval { activeInterval.lastObservedAt = max(activeInterval.startedAt, date) }
+            if let session = activeTrackingSession { session.lastObservedAt = max(session.startedAt, date) }
         }
     }
 
     private func commit(_ mutation: () throws -> Void) -> Bool {
+        var restore: (() -> Void)?
         do {
+            let oldCategories = categories.map { ($0, WorkspaceBackup.CategoryRecord($0)) }
+            let oldIntervals = intervals.map { ($0, WorkspaceBackup.IntervalRecord($0)) }
+            let oldSessions = trackingSessions.map { ($0, WorkspaceBackup.TrackingRecord($0)) }
+            restore = {
+                for (model, saved) in oldCategories {
+                    model.name = saved.name; model.colorName = saved.colorName; model.symbol = saved.symbol
+                    model.sortOrder = saved.sortOrder; model.isArchived = saved.isArchived
+                }
+                for (model, saved) in oldIntervals {
+                    model.categoryID = saved.categoryID; model.startedAt = saved.startedAt
+                    model.endedAt = saved.endedAt; model.lastObservedAt = saved.lastObservedAt
+                    model.taskID = saved.taskID; model.taskTitle = saved.taskTitle
+                }
+                for (model, saved) in oldSessions {
+                    model.startedAt = saved.startedAt; model.endedAt = saved.endedAt
+                    model.lastObservedAt = saved.lastObservedAt
+                }
+            }
             try mutation()
-            try context.save()
+            try saveChanges(context)
             try reload()
             errorMessage = nil
             didSave()
             return true
         } catch {
             context.rollback()
+            restore?()
             try? reload()
             errorMessage = error.localizedDescription
             return false
@@ -219,6 +286,7 @@ final class ActivityStore {
 
     private func reload() throws {
         categories = try context.fetch(FetchDescriptor<ActivityCategory>(sortBy: [SortDescriptor(\.sortOrder)]))
+        trackingSessions = try context.fetch(FetchDescriptor<TrackingSession>(sortBy: [SortDescriptor(\.startedAt)]))
         intervals = try context.fetch(FetchDescriptor<ActivityInterval>(sortBy: [SortDescriptor(\.startedAt)]))
     }
 
@@ -238,12 +306,12 @@ final class ActivityStore {
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { _ = self?.pause(reason: "Paused when your Mac went to sleep.") }
+            MainActor.assumeIsolated { _ = self?.stopTracking(reason: "Tracking stopped when your Mac went to sleep.") }
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { _ = self?.pause() }
+            MainActor.assumeIsolated { _ = self?.stopTracking() }
         })
         heartbeat = Task { [weak self] in
             while !Task.isCancelled {

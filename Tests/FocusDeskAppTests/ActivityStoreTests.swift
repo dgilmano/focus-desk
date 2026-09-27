@@ -38,6 +38,7 @@ final class ActivityStoreTests: XCTestCase {
         let start = Date().addingTimeInterval(-3600)
         let work = store.categories[0].id
         let rest = store.categories[1].id
+        XCTAssertTrue(store.startTracking(at: start))
         XCTAssertTrue(store.start(work, at: start))
         XCTAssertTrue(store.start(work, at: start.addingTimeInterval(60)))
         XCTAssertEqual(store.intervals.count, 1)
@@ -56,6 +57,7 @@ final class ActivityStoreTests: XCTestCase {
         let store = ActivityStore(container: container, observeLifecycle: false)
         let start = Date().addingTimeInterval(-7200)
         let checkpoint = start.addingTimeInterval(60)
+        XCTAssertTrue(store.startTracking(at: start))
         store.start(store.categories[0].id, at: start)
         store.checkpoint(at: checkpoint)
         let reopened = ActivityStore(container: container, observeLifecycle: false)
@@ -89,6 +91,7 @@ final class ActivityStoreTests: XCTestCase {
         let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = ActivityStore(container: container, observeLifecycle: false)
         let category = store.categories[0].id
+        XCTAssertTrue(store.startTracking(at: Date().addingTimeInterval(-60)))
         store.start(category, at: Date().addingTimeInterval(-60))
         store.setArchived(category, true)
         XCTAssertNil(store.activeInterval)
@@ -109,6 +112,7 @@ final class ActivityStoreTests: XCTestCase {
         let original = store.categories.map(\.id)
         store.setArchived(original[1], true)
         let start = Date().addingTimeInterval(-3600)
+        XCTAssertTrue(store.startTracking(at: start))
         XCTAssertTrue(store.start(original[0], at: start))
         let intervalID = store.activeInterval?.id
         let reordered = [original[4], original[0], original[2], original[3]]

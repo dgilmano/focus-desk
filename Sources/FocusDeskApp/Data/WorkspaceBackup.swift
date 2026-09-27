@@ -1,15 +1,16 @@
 import Foundation
 import SwiftData
 
-/// A portable format, independent of SwiftData's SQLite layout. Never change version 1 in place.
+/// A portable format, independent of SwiftData's SQLite layout. Version 2 adds tracking sessions; version 1 remains importable.
 struct WorkspaceBackup: Codable, Equatable, Sendable {
     var format = "FocusDeskBackup"
-    var version = 1
+    var version = 2
     var createdAt = Date()
     var tasks: [TaskRecord]
     var entries: [JournalRecord]
     var categories: [CategoryRecord]
     var intervals: [IntervalRecord]
+    var trackingSessions: [TrackingRecord]? = []
 
     struct TaskRecord: Codable, Equatable, Sendable {
         var id: UUID
@@ -85,11 +86,24 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
         }
     }
 
+    struct TrackingRecord: Codable, Equatable, Sendable {
+        var id: UUID
+        var startedAt: Date
+        var endedAt: Date?
+        var lastObservedAt: Date
+
+        @MainActor init(_ session: TrackingSession) {
+            id = session.id; startedAt = session.startedAt
+            endedAt = session.endedAt; lastObservedAt = session.lastObservedAt
+        }
+    }
+
     @MainActor static func capture(from context: ModelContext) throws -> Self {
         Self(tasks: try context.fetch(FetchDescriptor<FocusTask>()).map(TaskRecord.init),
              entries: try context.fetch(FetchDescriptor<ProgressEntry>()).map(JournalRecord.init),
              categories: try context.fetch(FetchDescriptor<ActivityCategory>()).map(CategoryRecord.init),
-             intervals: try context.fetch(FetchDescriptor<ActivityInterval>()).map(IntervalRecord.init))
+             intervals: try context.fetch(FetchDescriptor<ActivityInterval>()).map(IntervalRecord.init),
+             trackingSessions: try context.fetch(FetchDescriptor<TrackingSession>()).map(TrackingRecord.init))
     }
 
     /// Capture live references as well as values: rollback alone can leave SwiftUI-held models stale.
@@ -98,7 +112,11 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
         let entries = try context.fetch(FetchDescriptor<ProgressEntry>()).map { ($0, JournalRecord($0), $0.task) }
         let categories = try context.fetch(FetchDescriptor<ActivityCategory>()).map { ($0, CategoryRecord($0)) }
         let intervals = try context.fetch(FetchDescriptor<ActivityInterval>()).map { ($0, IntervalRecord($0)) }
+        let sessions = try context.fetch(FetchDescriptor<TrackingSession>()).map { ($0, TrackingRecord($0)) }
         return {
+            for (model, saved) in sessions {
+                model.startedAt = saved.startedAt; model.endedAt = saved.endedAt; model.lastObservedAt = saved.lastObservedAt
+            }
             for (model, saved, related) in tasks { saved.restoreFields(on: model); model.entries = related }
             for (model, saved, related) in entries {
                 model.note = saved.note; model.timestamp = saved.timestamp; model.task = related
@@ -116,7 +134,8 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
     }
 
     func validated() throws -> Self {
-        guard format == "FocusDeskBackup", version == 1 else {
+        guard format == "FocusDeskBackup", (version == 1 || version == 2),
+              version != 2 || trackingSessions != nil else {
             throw BackupError.invalid("This backup format is not supported by this version of Focus Desk.")
         }
         let taskIDs = Set(tasks.map(\.id))
@@ -143,6 +162,19 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
                 guard let previousEnd = sorted[index - 1].endedAt, previousEnd <= interval.startedAt else {
                     throw BackupError.invalid("The backup contains overlapping activity intervals.")
                 }
+            }
+        }
+        let sessions = (trackingSessions ?? []).sorted { $0.startedAt < $1.startedAt }
+        guard Set(sessions.map(\.id)).count == sessions.count else {
+            throw BackupError.invalid("The backup contains duplicate tracking sessions.")
+        }
+        for (index, session) in sessions.enumerated() {
+            guard session.lastObservedAt >= session.startedAt,
+                  session.endedAt.map({ $0 >= session.startedAt }) ?? true else {
+                throw BackupError.invalid("The backup contains an invalid tracking session.")
+            }
+            if index > 0, (sessions[index - 1].endedAt ?? .distantFuture) > session.startedAt {
+                throw BackupError.invalid("The backup contains overlapping tracking sessions.")
             }
         }
         return self
@@ -181,6 +213,7 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
         let oldTasks = try context.fetch(FetchDescriptor<FocusTask>())
         let oldEntries = try context.fetch(FetchDescriptor<ProgressEntry>())
         let oldCategories = try context.fetch(FetchDescriptor<ActivityCategory>())
+        let oldSessions = try context.fetch(FetchDescriptor<TrackingSession>())
         let oldIntervals = try context.fetch(FetchDescriptor<ActivityInterval>())
         var taskModels = Dictionary(uniqueKeysWithValues: oldTasks.map { ($0.id, $0) })
         let entryModels = Dictionary(uniqueKeysWithValues: oldEntries.map { ($0.id, $0) })
@@ -214,6 +247,16 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
             interval.lastObservedAt = record.endedAt == nil ? interval.endedAt! : record.lastObservedAt
             interval.taskID = record.taskID; interval.taskTitle = record.taskTitle
         }
+        let sessionModels = Dictionary(uniqueKeysWithValues: oldSessions.map { ($0.id, $0) })
+        for record in trackingSessions ?? [] {
+            let session = sessionModels[record.id] ?? TrackingSession(id: record.id, start: record.startedAt)
+            if sessionModels[record.id] == nil { context.insert(session) }
+            session.startedAt = record.startedAt
+            session.endedAt = record.endedAt ?? max(record.startedAt, min(now, record.lastObservedAt))
+            session.lastObservedAt = record.endedAt == nil ? session.endedAt! : record.lastObservedAt
+        }
+        let sessionIDs = Set((trackingSessions ?? []).map(\.id))
+        for session in oldSessions where !sessionIDs.contains(session.id) { context.delete(session) }
         let taskIDs = Set(tasks.map(\.id)), entryIDs = Set(entries.map(\.id))
         let categoryIDs = Set(categories.map(\.id)), intervalIDs = Set(intervals.map(\.id))
         for entry in oldEntries where !entryIDs.contains(entry.id) { context.delete(entry) }

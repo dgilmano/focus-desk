@@ -2,6 +2,37 @@ import XCTest
 @testable import FocusDeskCore
 
 final class ActivityTimelineTests: XCTestCase {
+    func testTrackedGapsExcludeNightsAndKeepLegacyRecordedTime() {
+        let start = origin
+        let day = DateInterval(start: start, duration: 86400)
+        let record = ActivityIntervalSnapshot(categoryID: work, start: start.addingTimeInterval(3600),
+                                               end: start.addingTimeInterval(7200))
+        let windows = [DateInterval(start: start.addingTimeInterval(10800), duration: 1800),
+                       DateInterval(start: start.addingTimeInterval(12000), duration: 1800),
+                       DateInterval(start: start.addingTimeInterval(18000), duration: 600)]
+        let result = ActivityTimeline.trackedSegments(in: day, intervals: [record], windows: windows, now: day.end)
+        XCTAssertEqual(result.filter { $0.intervalID == nil }.map(\.duration), [3000, 600])
+        XCTAssertEqual(ActivityTimeline.totals(for: result)[work], 3600)
+        let legacy = ActivityTimeline.trackedSegments(in: day, intervals: [record], windows: [], now: day.end)
+        XCTAssertEqual(legacy.count, 1)
+        XCTAssertEqual(legacy.first?.intervalID, record.id)
+        XCTAssertTrue(ActivityTimeline.trackedSegments(in: day, intervals: [], windows: [], now: day.end).isEmpty)
+    }
+
+    func testTrackingAcrossMidnightClipsToPeriodAndNow() {
+        let midnight = calendar.startOfDay(for: origin)
+        let session = DateInterval(start: midnight.addingTimeInterval(-3600), duration: 7200)
+        let now = midnight.addingTimeInterval(1800)
+        let day = calendar.dateInterval(of: .day, for: midnight)!
+        let today = ActivityTimeline.trackedSegments(in: day, intervals: [], windows: [session], now: now)
+        XCTAssertEqual(today.map(\.duration), [1800])
+        for period in [ActivityBalancePeriod.week, .month] {
+            let range = period.range(containing: midnight, calendar: calendar)!
+            let result = ActivityTimeline.trackedSegments(in: range, intervals: [], windows: [session], now: now)
+            XCTAssertEqual(result.reduce(0) { $0 + $1.duration }, now.timeIntervalSince(max(range.start, session.start)))
+        }
+    }
+
     func testResizingClampsToNeighboursAndSnapsToMinutes() throws {
         let day = calendar.dateInterval(of: .day, for: origin)!
         let start = day.start

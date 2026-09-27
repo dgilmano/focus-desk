@@ -6,11 +6,11 @@
 
 `ActivityStore` keeps a separate context. Successful commits and checkpoints schedule backups. `WorkspaceSession` coordinates restoration and refreshes the activity context and all workspace windows afterward. Do not add view-level `try? save()` calls or introduce another unsupervised writer.
 
-`BackupStore` reads committed records through a fresh context, not a cached view query. Export additionally includes pending task text from the main context, allowing text rescue when database writes fail. Local automatic writes use atomic replacement and restrictive file permissions. The exported JSON format is versioned independently of the database schema.
+`BackupStore` reads committed records through a fresh context, not a cached view query. Export additionally includes pending task text from the main context, allowing text rescue when database writes fail. Local automatic writes use atomic replacement and restrictive file permissions. The exported JSON format is versioned independently of the database schema. Format 2 includes tracking sessions, their checkpoints and boundaries; format 1 is still accepted with no inferred sessions. Restore and startup close unfinished sessions at their saved checkpoints.
 
 ## Schema changes
 
-The existing two-model task database is represented by schema 1; the current four-model database is schema 2. Both previously unversioned databases are tested against the migration plan. Entity names, relationship identity, and the legacy sort-order attribute mapping are preserved.
+The existing two-model task database is represented by schema 1; the four-model activity database is schema 2. Schema 3 adds tracking sessions; schemas 1 and 2 now use frozen definitions in `HistoricalModels.swift`. Both previously unversioned databases are tested against the migration plan. Entity names, relationship identity, and the legacy sort-order attribute mapping are preserved.
 
 Before the next structural model change, freeze the existing schema's model definitions and introduce a new version and migration stage. Do not modify historical schema definitions in place. Include a disk-based fixture migration test that checks every stored field and relationship, not just record counts.
 

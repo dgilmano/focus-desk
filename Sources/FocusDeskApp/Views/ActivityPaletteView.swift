@@ -26,6 +26,18 @@ struct ActivityIconButton: View {
     }
 }
 
+enum ActivityPaletteLayout {
+    static func columnCount(availableWidth: CGFloat, categoryCount: Int) -> Int {
+        max(1, min(categoryCount, Int(max(104, availableWidth - 80) / 112)))
+    }
+
+    static func cardWidth(availableWidth: CGFloat, categoryCount: Int) -> CGFloat {
+        let columns = columnCount(availableWidth: availableWidth, categoryCount: categoryCount)
+        // Two 36-point action buttons and two 8-point gaps sit beside the grid.
+        return max(0, (availableWidth - 88 - CGFloat(columns - 1) * 8) / CGFloat(columns))
+    }
+}
+
 struct ActivityPaletteView: View {
     @Environment(ActivityStore.self) private var store
     @State private var showingSettings = false
@@ -42,7 +54,7 @@ struct ActivityPaletteView: View {
     var availableWidth: CGFloat = 650
 
     private var workspaceColumns: [GridItem] {
-        let count = max(1, min(store.availableCategories.count, Int(max(104, availableWidth - 80) / 112)))
+        let count = ActivityPaletteLayout.columnCount(availableWidth: availableWidth, categoryCount: store.availableCategories.count)
         return Array(repeating: GridItem(.flexible(minimum: 0), spacing: 8), count: count)
     }
 
@@ -97,7 +109,7 @@ struct ActivityPaletteView: View {
                     .lineLimit(1)
                     .help(current.name)
             } else {
-                Text("Not tracking")
+                Text(store.inactiveTrackingLabel)
                     .font(.system(size: compact ? 11 : 12))
                     .foregroundStyle(.secondary)
             }
@@ -109,22 +121,7 @@ struct ActivityPaletteView: View {
     }
 
     private var workspacePalette: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(ActivityAppearance.accent(store.activeCategory?.colorName ?? "gray"))
-                    .frame(width: 11, height: 11)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { currentName; currentStart }
-                    VStack(alignment: .leading, spacing: 3) { currentName; currentStart }
-                }
-                Spacer(minLength: 8)
-                ActivityIconButton(symbol: "pause.fill", title: "Pause activity") { store.pause() }
-                    .padding(3)
-                    .background(FocusDeskStyle.focusSurface, in: Circle())
-                    .disabled(store.activeInterval == nil)
-            }
-
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
                 if store.availableCategories.isEmpty {
                     Text("No activities").font(.system(size: 13)).foregroundStyle(.secondary)
@@ -168,6 +165,8 @@ struct ActivityPaletteView: View {
                     showingSettings = true
                 }
             }
+
+
         }
     }
 
@@ -217,26 +216,11 @@ struct ActivityPaletteView: View {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { _ = store.reorderCategories(ids) }
     }
 
-    private var currentName: some View {
-        Text(store.activeCategory?.name ?? "Not tracking")
-            .font(.system(size: 16, weight: .semibold))
-            .lineLimit(1)
-            .help(store.activeCategory?.name ?? "Not tracking")
-    }
-
-    @ViewBuilder private var currentStart: some View {
-        if let interval = store.activeInterval {
-            Text("Since \(interval.startedAt.formatted(date: .omitted, time: .shortened))")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .fixedSize()
-        }
-    }
-
     private func workspaceActivityButton(_ category: ActivityCategory) -> some View {
-        let accent = ActivityAppearance.accent(category.colorName)
+        let canTrack = store.activeTrackingSession != nil
+        let accent = canTrack ? ActivityAppearance.accent(category.colorName) : Color.secondary
         let selected = store.activeCategory?.id == category.id
-        return Button { store.start(category.id) } label: {
+        return Button { store.toggleActivity(category.id) } label: {
             HStack(spacing: 8) {
                 Image(systemName: category.symbol)
                     .font(.system(size: 16, weight: .regular))
@@ -258,9 +242,10 @@ struct ActivityPaletteView: View {
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
-        .help("\(category.name) · Drag to reorder")
+        .opacity(canTrack ? 1 : 0.65)
+        .help(canTrack ? "\(category.name) · Drag to reorder" : "Start tracking to choose \(category.name) · Drag to reorder")
         .accessibilityLabel(category.name)
-        .accessibilityValue(selected ? "Active" : "Inactive")
+        .accessibilityValue(canTrack ? (selected ? "Active" : "Inactive") : "Start tracking to enable")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityAction(named: "Move earlier") { moveCategory(category.id, by: -1) }
         .accessibilityAction(named: "Move later") { moveCategory(category.id, by: 1) }
@@ -291,7 +276,7 @@ struct ActivityPaletteView: View {
     private func activityButton(_ category: ActivityCategory) -> some View {
         let palette = TaskTagPalette.palette(for: category.colorName)
         let selected = store.activeCategory?.id == category.id
-        return Button { store.start(category.id) } label: {
+        return Button { store.toggleActivity(category.id) } label: {
             HStack(spacing: compact ? 4 : 8) {
                 Image(systemName: selected ? "checkmark" : category.symbol)
                     .font(.system(size: compact ? 10 : 12))
@@ -478,4 +463,38 @@ enum ActivityTimeText {
         if minutes < 60 { return "\(minutes) min" }
         return minutes % 60 == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(minutes % 60) min"
     }
+}
+
+struct ActivityTrackingStatus: View {
+    @Environment(ActivityStore.self) private var store
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(ActivityAppearance.accent(store.activeCategory?.colorName ?? "gray"))
+                .frame(width: 7, height: 7)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { currentName; currentStart }
+                VStack(alignment: .leading, spacing: 3) { currentName; currentStart }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var currentName: some View {
+        Text(store.activeCategory?.name ?? store.inactiveTrackingLabel)
+            .font(.system(size: 13))
+            .lineLimit(1)
+            .help(store.activeCategory?.name ?? store.inactiveTrackingLabel)
+    }
+
+    @ViewBuilder private var currentStart: some View {
+        if let interval = store.activeInterval {
+            Text("Since \(interval.startedAt.formatted(date: .omitted, time: .shortened))")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize()
+        }
+    }
+
 }
