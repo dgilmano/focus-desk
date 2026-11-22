@@ -354,7 +354,6 @@ struct TaskFocusSummaryView: View {
                         .strikethrough(item.isCompleted)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
                     if isNext && !compactInspector {
                         Button(action: beginNextStepEditing) {
                             Image(systemName: "arrow.right").frame(width: 24, height: 24)
@@ -368,6 +367,7 @@ struct TaskFocusSummaryView: View {
                 .draggable(DeskStepDrag(taskID: task.id, stepID: item.id, source: source)) {
                     Text(item.text).lineLimit(2).padding(6)
                 }
+                .contextMenu { DeskCopyTextButton(text: item.text) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

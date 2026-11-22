@@ -1,5 +1,17 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+
+struct DeskCopyTextButton: View {
+    let text: String
+
+    var body: some View {
+        Button("Copy") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
+    }
+}
 
 struct DeskStepDrag: Codable, Transferable {
     let taskID: UUID

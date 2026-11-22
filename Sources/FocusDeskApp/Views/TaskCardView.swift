@@ -289,6 +289,7 @@ private struct ProgressEntryRow: View {
             row.draggable(DeskJournalDrag(taskID: taskID, entryID: entry.id)) {
                 Text(entry.note).lineLimit(2).padding(6)
             }
+            .contextMenu { DeskCopyTextButton(text: entry.note) }
         } else {
             row
         }
@@ -324,7 +325,6 @@ private struct ProgressEntryRow: View {
                         emphasisColor: compact ? FocusDeskStyle.deskAccent : nil
                     )
                     .foregroundStyle(.primary.opacity(0.82))
-                    .textSelection(.enabled)
                 }
 
                 if !isEditing && isExpandable {
