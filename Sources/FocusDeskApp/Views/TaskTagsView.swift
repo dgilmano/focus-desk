@@ -5,13 +5,16 @@ struct TaskTagsView: View {
     @Bindable var task: FocusTask
     var availableTags: [TaskTagRecord]
     var onTagsChanged: () -> Void
+    var isEditing = true
 
     var body: some View {
-        TaskTagsEditorView(
-            tags: tagBinding,
-            availableTags: availableTags,
-            onTagsChanged: onTagsChanged
-        )
+        if isEditing {
+            TaskTagsEditorView(tags: tagBinding, availableTags: availableTags, onTagsChanged: onTagsChanged)
+        } else if !task.tagRecords.isEmpty {
+            TagFlowLayout(spacing: 7, rowSpacing: 5) {
+                ForEach(task.tagRecords) { tag in StaticTaskTagChip(tag: tag) }
+            }
+        }
     }
 
     private var tagBinding: Binding<[TaskTagRecord]> {

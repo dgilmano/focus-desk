@@ -56,6 +56,10 @@ python3 scripts/release.py local
 
 The app is created at `dist/DerivedData/Build/Products/Debug/Focus Desk.app`. It is called **Focus Desk Dev** when running and uses a separate, sandboxed development workspace. No Apple Developer membership is required for this ad-hoc signed local build. It is not a public release.
 
+In Focus Desk Dev, open **Desk → microphone → Connect OpenAI** and enter your personal OpenAI API key. You can keep it in memory for this session or save it in macOS Keychain. Choose **New task** or **Update task**, then **Record → Stop recording → Transcribe**. You can also type or paste a note. **Create draft** prepares an editable title, description and next steps. Review the project and optional parent for each draft. Choose a project from the folder menu or enter a new name. A named subtask becomes its own task with independent completion. You can also dictate a project on its own or choose **Create project…** from the widget’s **…** menu. Add any GPT suggestions you want, then save each draft. When updating a task, the app sends its title, description and next steps along with the note. Audio is sent to OpenAI when you select **Transcribe**. OpenAI API usage is billed to your API account.
+
+In **Focus Desk Dev → Settings…** (⌘,), use **OpenAI → Task instructions** to set drafting preferences in plain text or Markdown. Changes save automatically on this Mac. **Create draft** includes these rules for new tasks and updates. Clear the field to restore the default behavior.
+
 `FocusDesk.xcodeproj` includes shared schemes for development, personal use, Developer ID distribution on GitHub, and Mac App Store distribution. All build **arm64 only** with macOS 14 as the minimum. Version and build number live in `Config/Version.xcconfig`.
 
 For daily personal use, build `python3 scripts/release.py personal`. This sandboxed app includes **Focus Desk > Check for Updates...**, powered by Sparkle 2.10.0. After an update is published, this command checks, downloads, installs and relaunches with the user's confirmation. Metadata and archives require Ed25519 signatures, and installation requires saving data and creating a recovery copy. It does not download or install updates in the background. The first personal installation must be built locally; its ad-hoc signature is **not** Apple Developer ID signing or notarization. See [personal updates](docs/personal-updates.md) for installation and publishing.
@@ -73,7 +77,7 @@ These Swift package commands do not create a distributable app bundle and are no
 
 The widget scaffold is disabled in the app until a real extension, App Group and signing configuration are added. The extension entry point uses `FOCUS_DESK_WIDGET_EXTENSION`; the app writer separately uses `FOCUS_DESK_WIDGET_HOST`. Do not enable either in a release without updating entitlements and the privacy manifest.
 
-Debug Swift package builds can use `FOCUS_DESK_SERVER_TIME_URL` with an HTTP `Date` endpoint. Release builds always use the local clock. Only updater builds have outgoing network access for GitHub downloads; cloud sign-in remains an unfinished UI, not working cloud sync. The App Store target does not link Sparkle or include its update settings.
+Debug Swift package builds can use `FOCUS_DESK_SERVER_TIME_URL` with an HTTP `Date` endpoint. Release builds always use the local clock. The local development app uses outgoing networking for voice notes. Updater builds use it for GitHub downloads. Cloud sign-in remains an unfinished UI. The App Store target does not link Sparkle or include its update settings.
 
 Packaging, signing, notarization, Apple account setup, and release gates: [macOS release guide](docs/macos-release.md).
 

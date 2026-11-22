@@ -7,6 +7,135 @@ import XCTest
 final class DataProtectionTests: XCTestCase {
     private enum SaveFailure: Error { case diskFull }
 
+    #if DEBUG
+    func testCloudDropMovesBranchAndSupportsUntaggedWithoutChangingTags() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let store = TaskStore(context: context)
+        let parent = FocusTask(title: "Learning plan", sortOrder: 0)
+        parent.tagRecords = [.init(name: "Learning")]
+        let task = FocusTask(title: "Practice", sortOrder: 1)
+        task.tagRecords = [.init(name: "Learning"), .init(name: "Weekly", sortOrder: 1)]
+        task.parentTaskID = parent.id
+        let tags = task.tagData
+        let child = FocusTask(title: "Warm up", sortOrder: 2, completedAt: Date())
+        child.parentTaskID = task.id
+        child.tagRecords = [.init(name: "Learning")]
+        let sport = FocusTask(title: "Training", sortOrder: 3)
+        sport.tagRecords = [.init(name: "Sport")]
+        for member in [parent, task, child, sport] { context.insert(member) }
+        try context.save()
+        let moved = try store.moveMapTask(id: task.id, from: "Learning", to: "Sport")
+        XCTAssertEqual(moved, [task.id, child.id])
+        XCTAssertEqual(task.projectName, "Sport")
+        XCTAssertEqual(child.projectName, "Sport")
+        XCTAssertEqual(child.parentTaskID, task.id)
+        XCTAssertNil(task.parentTaskID)
+        XCTAssertEqual(parent.deskProjectKey, "learning")
+        XCTAssertEqual(task.tagData, tags)
+        XCTAssertThrowsError(try store.moveMapTask(id: task.id, from: "Learning", to: nil))
+        _ = try store.moveMapTask(id: task.id, from: "Sport", to: nil)
+        XCTAssertNil(task.deskProjectKey)
+        XCTAssertNil(child.deskProjectKey)
+        XCTAssertThrowsError(try store.renameProject(from: nil, to: "Sport"))
+        try store.renameProject(from: nil, to: " Mobility ")
+        XCTAssertEqual(task.projectName, "Mobility")
+        XCTAssertEqual(child.projectName, "Mobility")
+        XCTAssertEqual(task.tagData, tags)
+        let snapshot = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(Set(snapshot.projects ?? []), ["Sport", "Learning", "Mobility"])
+        let fresh = FocusTask(title: "New note", sortOrder: 4)
+        XCTAssertTrue(store.create(fresh))
+        XCTAssertNil(fresh.deskProjectKey)
+    }
+
+    func testFailedDropRestoresParentAndProjectAndAllowsRetry() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let root = FocusTask(title: "Plan", sortOrder: 0)
+        let child = FocusTask(title: "Practice", sortOrder: 1)
+        child.parentTaskID = root.id
+        let project = DeskProject(name: "Sport")
+        context.insert(root)
+        context.insert(child)
+        context.insert(project)
+        try context.save()
+        var fail = true
+        let store = TaskStore(context: context, persist: { if fail { throw SaveFailure.diskFull }; try $0.save() })
+        XCTAssertThrowsError(try store.moveMapTask(id: child.id, from: nil, to: "Sport"))
+        XCTAssertNil(child.projectName)
+        XCTAssertEqual(child.parentTaskID, root.id)
+        XCTAssertThrowsError(try store.renameProject(from: nil, to: "Learning"))
+        XCTAssertNil(root.projectName)
+        XCTAssertNil(child.projectName)
+        fail = false
+        _ = try store.moveMapTask(id: child.id, from: nil, to: "Sport")
+        XCTAssertNil(child.parentTaskID)
+        XCTAssertEqual(child.projectName, "Sport")
+    }
+
+    func testMapRenameIncludesLegacyAndCompletedTasksAndDeletionUndo() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let store = TaskStore(context: context)
+        let root = populatedTask()
+        root.tagRecords = [TaskTagRecord(name: "Learning", colorName: "green")]
+        let tags = root.tagData
+        let child = FocusTask(title: "Practice", sortOrder: 2)
+        child.parentTaskID = root.id
+        child.projectName = "learning"
+        let past = FocusTask(title: "Archived", sortOrder: 3)
+        past.projectName = "Learning"
+        for task in [root, child, past] { context.insert(task) }
+        context.insert(DeskProject(name: "Learning"))
+        context.insert(DeskProject(name: "Sport"))
+        try context.save()
+        XCTAssertTrue(store.delete(past))
+        XCTAssertThrowsError(try store.renameProject(from: "Learning", to: " sport "))
+        try store.renameProject(from: "Learning", to: " Study ")
+        XCTAssertEqual(root.tagData, tags)
+        XCTAssertEqual(root.deskProjectTag?.name, "Study")
+        XCTAssertEqual(root.deskProjectTag?.colorName, "green")
+        XCTAssertEqual(child.projectName, "Study")
+        XCTAssertTrue(store.undoDeletion())
+        try store.renameTask(id: child.id, from: "Practice", to: " Practice piano ")
+        XCTAssertThrowsError(try store.renameTask(id: child.id, from: "Practice", to: "Stale edit"))
+        XCTAssertEqual(child.title, "Practice piano")
+        XCTAssertEqual(child.parentTaskID, root.id)
+        let snapshot = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(Set(snapshot.projects ?? []), ["Study", "Sport"])
+        XCTAssertTrue(snapshot.tasks.allSatisfy { $0.projectName == "Study" })
+        XCTAssertEqual(snapshot.entries.map(\.taskID), [root.id])
+    }
+
+    func testFailedMapRenameRestoresTaskAndProjectAndAllowsRetry() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let task = populatedTask()
+        let project = DeskProject(name: "Work")
+        context.insert(task)
+        context.insert(project)
+        try context.save()
+        let original = WorkspaceBackup.TaskRecord(task)
+        var fail = true
+        let store = TaskStore(context: context, persist: {
+            if fail { throw SaveFailure.diskFull }
+            try $0.save()
+        })
+        XCTAssertThrowsError(try store.renameProject(from: "Work", to: "Projects"))
+        XCTAssertThrowsError(try store.renameTask(id: task.id, from: original.title, to: "Updated"))
+        XCTAssertEqual(project.name, "Work")
+        XCTAssertEqual(project.key, "work")
+        XCTAssertEqual(WorkspaceBackup.TaskRecord(task), original)
+        fail = false
+        try store.renameProject(from: "Work", to: "WORK")
+        XCTAssertEqual(task.deskProjectTag?.name, "WORK")
+        XCTAssertEqual(project.name, "WORK")
+        XCTAssertThrowsError(try store.renameProject(from: "WORK", to: " "))
+        XCTAssertThrowsError(try store.renameTask(id: task.id, from: original.title, to: " "))
+    }
+    #endif
+
     func testUpdateSavesDraftAndPausesActivityBeforeRecoveryCopy() throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -86,6 +215,50 @@ final class DataProtectionTests: XCTestCase {
         XCTAssertEqual(task.entries.first?.note, "Keep this note")
     }
 
+    func testCompletingStepMovesOnlyThatLineToItsJournal() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let store = TaskStore(context: context)
+        let source = "1. Собрать **логи**\n2. Собрать **логи**\n3. Открыть тикет"
+        let task = FocusTask(title: "Сертификат", sortOrder: 0, nextStep: source, localDraft: "Мой черновик")
+        XCTAssertTrue(store.create(task))
+        XCTAssertTrue(store.completeNextStep(1, in: task, from: source))
+        XCTAssertFalse(store.completeNextStep(1, in: task, from: source))
+        let savedContext = ModelContext(container)
+        let saved = try XCTUnwrap(savedContext.fetch(FetchDescriptor<FocusTask>()).first)
+        XCTAssertEqual(saved.nextStep, "1. Собрать **логи**\n3. Открыть тикет")
+        XCTAssertEqual(saved.entries.map(\.note), ["Done: Собрать **логи**"])
+        XCTAssertEqual(saved.entries.first?.task?.id, task.id)
+        XCTAssertEqual(saved.localDraft, "Мой черновик")
+        XCTAssertNil(saved.completedAt)
+    }
+
+    func testFailedStepCompletionKeepsStepAndRetryRecordsItOnce() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let source = "- [x] Сверить версии"
+        let task = FocusTask(title: "Проверка", sortOrder: 0, nextStep: source)
+        context.insert(task)
+        context.insert(ProgressEntry(note: "Начало", timestamp: Date(), task: task))
+        try context.save()
+        let updatedAt = task.updatedAt
+        var fail = true
+        let store = TaskStore(context: context, persist: {
+            if fail { throw SaveFailure.diskFull }
+            try $0.save()
+        })
+        XCTAssertFalse(store.completeNextStep(0, in: task, from: source))
+        XCTAssertEqual(task.nextStep, source)
+        XCTAssertEqual(task.updatedAt, updatedAt)
+        XCTAssertEqual(task.entries.map(\.note), ["Начало"])
+        XCTAssertEqual(try ModelContext(container).fetchCount(FetchDescriptor<ProgressEntry>()), 1)
+        fail = false
+        XCTAssertTrue(store.completeNextStep(0, in: task, from: source))
+        XCTAssertNil(task.nextStep)
+        XCTAssertFalse(store.completeNextStep(0, in: task, from: source))
+        XCTAssertEqual(task.entries.map(\.note).sorted(), ["Done: Сверить версии", "Начало"])
+    }
+
     func testJournalDoesNotClearTextTypedWhileWaitingForTimestamp() throws {
         let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = TaskStore(context: container.mainContext)
@@ -94,6 +267,51 @@ final class DataProtectionTests: XCTestCase {
         XCTAssertTrue(store.recordJournal(for: task, draft: "Submitted draft", at: Date()))
         XCTAssertEqual(task.localDraft, "New draft")
         XCTAssertEqual(task.entries.first?.note, "Submitted draft")
+    }
+
+    func testJournalStepRoundTripAndFailedReturn() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        var fail = false
+        let store = TaskStore(context: context, persist: {
+            if fail { throw SaveFailure.diskFull }
+            try $0.save()
+        })
+        let source = "Первый\n- [ ] 2. **Тест**"
+        let task = FocusTask(title: "Задача", sortOrder: 0, nextStep: source, localDraft: "Черновик")
+        let other = FocusTask(title: "Другая задача", sortOrder: 1)
+        XCTAssertTrue(store.create(task))
+        XCTAssertTrue(store.create(other))
+        XCTAssertTrue(store.completeNextStep(1, in: task, from: source))
+        let entryID = try XCTUnwrap(task.entries.first?.id)
+        let updatedAt = task.updatedAt
+        XCTAssertFalse(store.moveJournalEntryToNextStep(entryID, in: other))
+        fail = true
+        XCTAssertFalse(store.moveJournalEntryToNextStep(entryID, in: task))
+        XCTAssertEqual(task.nextStep, "Первый")
+        XCTAssertEqual(task.updatedAt, updatedAt)
+        XCTAssertEqual(task.entries.map(\.note), ["Done: 2. **Тест**"])
+        fail = false
+        XCTAssertTrue(store.moveJournalEntryToNextStep(entryID, in: task))
+        XCTAssertFalse(store.moveJournalEntryToNextStep(entryID, in: task))
+        XCTAssertEqual(NextStepChecklist(task.nextStep ?? "").items.map(\.text), ["Первый", "2. **Тест**"])
+        XCTAssertEqual(task.localDraft, "Черновик")
+        XCTAssertNil(other.nextStep)
+        XCTAssertEqual(try ModelContext(container).fetchCount(FetchDescriptor<ProgressEntry>()), 0)
+    }
+
+    func testMoveOrdinaryJournalNoteIntoEmptyChecklist() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let store = TaskStore(context: container.mainContext)
+        let task = FocusTask(title: "Задача", sortOrder: 0)
+        XCTAssertTrue(store.create(task))
+        XCTAssertTrue(store.recordJournal(for: task, draft: "Проверить [отчёт](https://example.com)", at: Date()))
+        let entryID = try XCTUnwrap(task.entries.first?.id)
+        XCTAssertTrue(store.moveJournalEntryToNextStep(entryID, in: task))
+        let checklist = NextStepChecklist(task.nextStep ?? "")
+        XCTAssertEqual(checklist.items.map(\.text), ["Проверить [отчёт](https://example.com)"])
+        XCTAssertFalse(try XCTUnwrap(checklist.items.first).isCompleted)
+        XCTAssertTrue(task.entries.isEmpty)
     }
 
     func testFailedCreateCompletionAndDeletionDoNotCommit() throws {
@@ -385,8 +603,29 @@ final class DataProtectionTests: XCTestCase {
     }
 
     private func makeUnversionedStore(at url: URL) throws -> WorkspaceBackup {
-        let schema = Schema([FocusTask.self, ProgressEntry.self, ActivityCategory.self, ActivityInterval.self])
+        let original = try makeMigrationFixture()
+        let schema = Schema(FocusDeskSchemaV2.models)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
+        let context = container.mainContext
+        let task = try XCTUnwrap(original.tasks.first)
+        let old = HistoricalModels.FocusTask(id: task.id, title: task.title, details: task.details, createdAt: task.createdAt,
+            updatedAt: task.updatedAt, sortOrder: task.sortOrder, completedAt: task.completedAt, motivation: task.motivation,
+            nextStep: task.nextStep, localDraft: task.localDraft, tagData: task.tagData)
+        context.insert(old)
+        for entry in original.entries {
+            context.insert(HistoricalModels.ProgressEntry(id: entry.id, note: entry.note, timestamp: entry.timestamp, task: old))
+        }
+        let category = try XCTUnwrap(original.categories.first)
+        let interval = try XCTUnwrap(original.intervals.first)
+        context.insert(HistoricalModels.ActivityCategory(id: category.id, name: category.name, colorName: category.colorName,
+                                                         symbol: category.symbol, sortOrder: category.sortOrder))
+        context.insert(HistoricalModels.ActivityInterval(id: interval.id, categoryID: category.id, start: interval.startedAt, end: interval.endedAt))
+        try context.save()
+        return original
+    }
+
+    private func makeMigrationFixture() throws -> WorkspaceBackup {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
         let context = container.mainContext
         context.insert(populatedTask())
         let category = ActivityCategory(name: "Work", colorName: "blue", symbol: "briefcase", sortOrder: 0)

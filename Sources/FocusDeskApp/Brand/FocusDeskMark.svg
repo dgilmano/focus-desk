@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="tile" x1="0.05" y1="0" x2="0.88" y2="1">
+      <stop stop-color="#5578FF"/>
+      <stop offset="0.52" stop-color="#3456EA"/>
+      <stop offset="1" stop-color="#283DB3"/>
+    </linearGradient>
+    <linearGradient id="cloud" x2="0.36" y2="1">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E8EFFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="9" y="10.5" width="110" height="110" rx="26" fill="#162976" opacity=".18"/>
+  <rect x="9" y="9" width="110" height="110" rx="26" fill="url(#tile)"/>
+  <rect x="9.6" y="9.6" width="108.8" height="108.8" rx="25.4" fill="none" stroke="#FFFFFF" stroke-opacity=".18" stroke-width="1.2"/>
+  <!-- One project feeds two tasks. The active task is the solid citron node. -->
+  <path d="M63 65v8q0 7-7 7h-7q-7 0-7 7v3 M63 73q0 7 7 7h9q7 0 7 7v3"
+        fill="none" stroke="#DCE7FF" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M44 68.5c-9.2 0-16-6.3-16-14.2 0-7.9 6.1-14.2 14.5-14.8
+           C45.3 31.5 52.1 26 61.8 26c9.9 0 17.7 5.8 20.3 14.3
+           9.9-.2 17.4 5.8 17.4 14.5 0 8.2-6.9 13.7-15.8 13.7Z"
+        fill="url(#cloud)"/>
+  <circle cx="42" cy="93" r="6" fill="#3456E5" stroke="#EDF3FF" stroke-width="4"/>
+  <circle cx="86" cy="93" r="8" fill="#D8FA83"/>
+</svg>

@@ -13,7 +13,8 @@ class ReleaseTests(unittest.TestCase):
                 "CFBundlePackageType": "APPL", "CFBundleExecutable": "FocusDesk",
                 "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
                 "LSMinimumSystemVersion": "14.0", "LSRequiresNativeExecution": True,
-                "CFBundleIconFile": "AppIcon.icns"}
+                "CFBundleIconFile": "AppIcon.icns",
+                **({"NSMicrophoneUsageDescription": "Record voice notes"} if mode == "local" else {})}
 
     def entitlements(self):
         return release.read_plist(release.ROOT / "Config/FocusDesk.entitlements")
@@ -40,9 +41,13 @@ class ReleaseTests(unittest.TestCase):
                 release.validate_versions(version, build)
 
     def test_entitlements_are_minimal_for_both_channels(self):
-        for mode in ["local", "app-store"]:
-            release.validate_entitlements(self.entitlements(), mode)
-        for extra in ["com.apple.security.network.client", "com.apple.security.cs.disable-library-validation",
+        release.validate_entitlements(self.entitlements(), "app-store")
+        local = release.read_plist(release.ROOT / "Config/FocusDeskDev.entitlements")
+        release.validate_entitlements(local, "local")
+        for key in ["com.apple.security.network.client", "com.apple.security.device.audio-input"]:
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                release.validate_entitlements({k: v for k, v in local.items() if k != key}, "local")
+        for extra in ["com.apple.security.network.client", "com.apple.security.device.audio-input", "com.apple.security.cs.disable-library-validation",
                       "com.apple.security.get-task-allow", "com.apple.security.application-groups"]:
             with self.subTest(extra=extra), self.assertRaises(ValueError):
                 release.validate_entitlements({**self.entitlements(), extra: True}, "app-store")

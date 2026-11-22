@@ -20,6 +20,8 @@ final class FocusTask: Identifiable {
     var nextStep: String?
     var localDraft: String
     var tagData: String?
+    var projectName: String?
+    var parentTaskID: UUID?
 
     @Relationship(deleteRule: .cascade, inverse: \ProgressEntry.task)
     var entries: [ProgressEntry]
@@ -54,6 +56,33 @@ final class FocusTask: Identifiable {
 }
 
 @Model
+final class DeskProject {
+    @Attribute(.unique) var key: String
+    var name: String
+
+    init(name: String) {
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.key = Self.key(for: name)
+    }
+
+    static func key(for name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+enum TaskHierarchy {
+    static func branch(from root: UUID, links: [(id: UUID, parent: UUID?)]) -> Set<UUID> {
+        let children = Dictionary(grouping: links, by: \.parent)
+        var found = Set<UUID>()
+        var queue = [root]
+        while let id = queue.popLast() {
+            if found.insert(id).inserted { queue.append(contentsOf: (children[id] ?? []).map(\.id)) }
+        }
+        return found
+    }
+}
+
+@Model
 final class ProgressEntry: Identifiable {
     @Attribute(.unique) var id: UUID
     var note: String
@@ -69,6 +98,20 @@ final class ProgressEntry: Identifiable {
 }
 
 extension FocusTask {
+    var deskProjectKey: String? { deskProjectTag.map { DeskProject.key(for: $0.name) } }
+
+    /// An unset project preserves the original Desk grouping for existing tasks.
+    var deskProjectTag: TaskTagRecord? {
+        let tags = enabledTagRecords
+        guard let projectName else {
+            return tags.first { !DeskProject.key(for: $0.name).isEmpty }
+        }
+        let key = DeskProject.key(for: projectName)
+        guard !key.isEmpty else { return nil }
+        let paletteTag = tags.first { DeskProject.key(for: $0.name) == key } ?? tags.first
+        return TaskTagRecord(id: paletteTag?.id ?? id, name: projectName, colorName: paletteTag?.colorName ?? "blue")
+    }
+
     var newestEntries: [ProgressEntry] {
         entries.sorted { lhs, rhs in
             lhs.timestamp > rhs.timestamp

@@ -1,6 +1,11 @@
 // swift-tools-version: 6.0
 
+import Foundation
 import PackageDescription
+
+let microphoneInfo = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent("Config/SwiftPackageVoiceInfo.plist")
 
 let package = Package(
     name: "FocusDesk",
@@ -19,7 +24,15 @@ let package = Package(
         .executableTarget(
             name: "FocusDesk",
             dependencies: ["FocusDeskCore"],
-            path: "Sources/FocusDeskApp"
+            path: "Sources/FocusDeskApp",
+            resources: [.copy("Brand/FocusDeskMark.svg")],
+            linkerSettings: [
+                // swift run starts a standalone executable, so macOS reads its privacy usage string from Mach-O.
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist",
+                    "-Xlinker", microphoneInfo.path
+                ], .when(platforms: [.macOS], configuration: .debug))
+            ]
         ),
         .target(
             name: "FocusDeskWidget",

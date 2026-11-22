@@ -163,11 +163,11 @@ final class ActivityStoreTests: XCTestCase {
     }
 
     private func createOriginalStore(at url: URL, taskID: UUID) throws {
-        let schema = Schema([FocusTask.self, ProgressEntry.self])
+        let schema = Schema([HistoricalModels.FocusTask.self, HistoricalModels.ProgressEntry.self])
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
         let context = ModelContext(container)
-        let task = FocusTask(id: taskID, title: "Existing task", sortOrder: 0)
-        let entry = ProgressEntry(note: "Existing journal", timestamp: Date(), task: task)
+        let task = HistoricalModels.FocusTask(id: taskID, title: "Existing task", sortOrder: 0)
+        let entry = HistoricalModels.ProgressEntry(note: "Existing journal", timestamp: Date(), task: task)
         context.insert(task)
         context.insert(entry)
         try context.save()

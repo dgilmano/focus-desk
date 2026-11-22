@@ -1,16 +1,17 @@
 import Foundation
 import SwiftData
 
-/// A portable format, independent of SwiftData's SQLite layout. Version 2 adds tracking sessions; version 1 remains importable.
+/// A portable format, independent of SwiftData's SQLite layout.
 struct WorkspaceBackup: Codable, Equatable, Sendable {
     var format = "FocusDeskBackup"
-    var version = 2
+    var version = 3
     var createdAt = Date()
     var tasks: [TaskRecord]
     var entries: [JournalRecord]
     var categories: [CategoryRecord]
     var intervals: [IntervalRecord]
     var trackingSessions: [TrackingRecord]? = []
+    var projects: [String]? = []
 
     struct TaskRecord: Codable, Equatable, Sendable {
         var id: UUID
@@ -24,24 +25,33 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
         var nextStep: String?
         var localDraft: String
         var tagData: String?
+        var projectName: String?
+        var parentTaskID: UUID?
 
         @MainActor init(_ task: FocusTask) {
             id = task.id; title = task.title; details = task.details
             createdAt = task.createdAt; updatedAt = task.updatedAt; sortOrder = task.sortOrder
             completedAt = task.completedAt; motivation = task.motivation; nextStep = task.nextStep
             localDraft = task.localDraft; tagData = task.tagData
+            projectName = task.projectName
+            parentTaskID = task.parentTaskID
         }
 
         @MainActor func makeModel() -> FocusTask {
-            FocusTask(id: id, title: title, details: details, createdAt: createdAt,
+            let task = FocusTask(id: id, title: title, details: details, createdAt: createdAt,
                       updatedAt: updatedAt, sortOrder: sortOrder, completedAt: completedAt,
                       motivation: motivation, nextStep: nextStep, localDraft: localDraft, tagData: tagData)
+            task.projectName = projectName
+            task.parentTaskID = parentTaskID
+            return task
         }
 
         @MainActor func restoreFields(on task: FocusTask) {
             task.title = title; task.details = details; task.createdAt = createdAt; task.updatedAt = updatedAt
             task.sortOrder = sortOrder; task.completedAt = completedAt; task.motivation = motivation
             task.nextStep = nextStep; task.localDraft = localDraft; task.tagData = tagData
+            task.projectName = projectName
+            task.parentTaskID = parentTaskID
         }
     }
 
@@ -103,7 +113,8 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
              entries: try context.fetch(FetchDescriptor<ProgressEntry>()).map(JournalRecord.init),
              categories: try context.fetch(FetchDescriptor<ActivityCategory>()).map(CategoryRecord.init),
              intervals: try context.fetch(FetchDescriptor<ActivityInterval>()).map(IntervalRecord.init),
-             trackingSessions: try context.fetch(FetchDescriptor<TrackingSession>()).map(TrackingRecord.init))
+             trackingSessions: try context.fetch(FetchDescriptor<TrackingSession>()).map(TrackingRecord.init),
+             projects: try context.fetch(FetchDescriptor<DeskProject>(sortBy: [SortDescriptor(\.key)])).map(\.name))
     }
 
     /// Capture live references as well as values: rollback alone can leave SwiftUI-held models stale.
@@ -113,7 +124,9 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
         let categories = try context.fetch(FetchDescriptor<ActivityCategory>()).map { ($0, CategoryRecord($0)) }
         let intervals = try context.fetch(FetchDescriptor<ActivityInterval>()).map { ($0, IntervalRecord($0)) }
         let sessions = try context.fetch(FetchDescriptor<TrackingSession>()).map { ($0, TrackingRecord($0)) }
+        let projects = try context.fetch(FetchDescriptor<DeskProject>()).map { ($0, $0.name) }
         return {
+            for (model, name) in projects { model.name = name }
             for (model, saved) in sessions {
                 model.startedAt = saved.startedAt; model.endedAt = saved.endedAt; model.lastObservedAt = saved.lastObservedAt
             }
@@ -134,8 +147,8 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
     }
 
     func validated() throws -> Self {
-        guard format == "FocusDeskBackup", (version == 1 || version == 2),
-              version != 2 || trackingSessions != nil else {
+        guard format == "FocusDeskBackup", (1...3).contains(version),
+              version < 2 || trackingSessions != nil, version < 3 || projects != nil else {
             throw BackupError.invalid("This backup format is not supported by this version of Focus Desk.")
         }
         let taskIDs = Set(tasks.map(\.id))
@@ -148,6 +161,28 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
         guard entries.allSatisfy({ $0.taskID == nil || taskIDs.contains($0.taskID!) }),
               intervals.allSatisfy({ categoryIDs.contains($0.categoryID) }) else {
             throw BackupError.invalid("The backup contains broken task or activity links.")
+        }
+        let projectKeys = (projects ?? []).map(DeskProject.key)
+        let knownProjects = Set(projectKeys)
+        guard !knownProjects.contains(""), knownProjects.count == projectKeys.count,
+              tasks.allSatisfy({ record in
+                  let key = DeskProject.key(for: record.projectName ?? "")
+                  return key.isEmpty || knownProjects.contains(key)
+              }) else { throw BackupError.invalid("The backup contains an invalid project.") }
+        let parents = Dictionary(uniqueKeysWithValues: tasks.compactMap { task in
+            task.parentTaskID.map { (task.id, $0) }
+        })
+        var checked = Set<UUID>()
+        for id in parents.keys where !checked.contains(id) {
+            var path = Set<UUID>()
+            var node = id
+            while let parent = parents[node], !checked.contains(node) {
+                guard taskIDs.contains(parent), path.insert(node).inserted else {
+                    throw BackupError.invalid("The backup contains a missing or circular parent task.")
+                }
+                node = parent
+            }
+            checked.formUnion(path)
         }
         let sorted = intervals.sorted {
             if $0.startedAt == $1.startedAt { return ($0.endedAt ?? .distantFuture) < ($1.endedAt ?? .distantFuture) }
@@ -211,6 +246,14 @@ struct WorkspaceBackup: Codable, Equatable, Sendable {
     @MainActor func apply(to context: ModelContext, now: Date = Date()) throws {
         _ = try validated()
         let oldTasks = try context.fetch(FetchDescriptor<FocusTask>())
+        let oldProjects = try context.fetch(FetchDescriptor<DeskProject>())
+        let projectModels = Dictionary(uniqueKeysWithValues: oldProjects.map { ($0.key, $0) })
+        let restoredProjects = Set((projects ?? []).map(DeskProject.key))
+        for name in projects ?? [] {
+            if let project = projectModels[DeskProject.key(for: name)] { project.name = name }
+            else { context.insert(DeskProject(name: name)) }
+        }
+        for project in oldProjects where !restoredProjects.contains(project.key) { context.delete(project) }
         let oldEntries = try context.fetch(FetchDescriptor<ProgressEntry>())
         let oldCategories = try context.fetch(FetchDescriptor<ActivityCategory>())
         let oldSessions = try context.fetch(FetchDescriptor<TrackingSession>())

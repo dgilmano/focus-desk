@@ -1,33 +1,33 @@
 import SwiftUI
 
 enum FocusDeskStyle {
-    static let workspaceHorizontalPadding: CGFloat = 28
-    static let workspaceTopPadding: CGFloat = 64
+    static let workspaceInsets = EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
+    static let deskPanelSpacing: CGFloat = 18
+    static let deskInsets = EdgeInsets(top: 0, leading: deskPanelSpacing, bottom: 0, trailing: deskPanelSpacing)
+    static let panelPadding: CGFloat = 16
     static let workspaceColumnSpacing: CGFloat = 49
     static let workspaceCompactBreakpoint: CGFloat = 650
     static let workspaceSectionFont = Font.system(size: 17, weight: .semibold)
     static let workspaceBodyFont = Font.system(size: 12)
 
-    static var workspaceBackground: Color { Color(nsColor: .textBackgroundColor) }
+    static let appBackground = adaptiveColor(
+        light: NSColor(white: 0.96, alpha: 1),
+        dark: NSColor(white: 0.105, alpha: 1)
+    )
 
-    static var appBackground: Color {
-        Color(nsColor: .windowBackgroundColor)
-    }
+    static let groupedBackground = adaptiveColor(
+        light: .white,
+        dark: NSColor(white: 0.17, alpha: 1)
+    )
 
-    static var sidebarBackground: Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let matchedAppearance = appearance.bestMatch(from: [.aqua, .darkAqua])
+    static let deskActionBlue = Color(red: 41 / 255, green: 84 / 255, blue: 237 / 255)
+    static let deskAccent = adaptiveColor(
+        light: NSColor(srgbRed: 0.23, green: 0.29, blue: 0.68, alpha: 1),
+        dark: NSColor(srgbRed: 0.68, green: 0.73, blue: 1, alpha: 1)
+    )
 
-            if matchedAppearance == .darkAqua {
-                return NSColor(calibratedWhite: 0.13, alpha: 1)
-            }
-
-            return NSColor(calibratedWhite: 0.965, alpha: 1)
-        })
-    }
-
-    static var groupedBackground: Color {
-        Color(nsColor: .controlBackgroundColor)
+    static func workspaceContentWidth(for width: CGFloat, insets: EdgeInsets = workspaceInsets) -> CGFloat {
+        max(0, width - insets.leading - insets.trailing)
     }
 
     static var selectedBackground: Color {
@@ -44,7 +44,7 @@ enum FocusDeskStyle {
     static var focusSurface: Color {
         adaptiveColor(
             light: NSColor(calibratedWhite: 0.956, alpha: 1),
-            dark: NSColor(calibratedWhite: 0.17, alpha: 1)
+            dark: NSColor(white: 0.22, alpha: 1)
         )
     }
 
@@ -95,6 +95,61 @@ struct FocusDeskIcon: View {
                         .fill(.secondary.opacity(0.22))
                 }
             }
+    }
+}
+
+private struct DeskDetailSymbol: View {
+    let symbol: String
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 12, weight: .medium))
+            .frame(width: 23, height: 23)
+            .background(FocusDeskStyle.deskAccent.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+            .accessibilityHidden(true)
+    }
+}
+
+struct DeskDetailHeading: View {
+    let title: String
+    let symbol: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            DeskDetailSymbol(symbol: symbol).foregroundStyle(.primary.opacity(0.8))
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+}
+
+struct DeskDetailEditButton: View {
+    let isEditing: Bool
+    let section: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                DeskDetailSymbol(symbol: isEditing ? "checkmark" : "square.and.pencil")
+                Text(isEditing ? "Done" : "Edit")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(isEditing ? FocusDeskStyle.deskAccent : Color.primary.opacity(0.8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isEditing ? "Finish editing " + section : "Edit " + section)
+        .help(isEditing ? "Finish editing " + section : "Edit " + section)
+    }
+}
+
+extension View {
+    func workspacePanel(fillHeight: Bool = false) -> some View {
+        padding(FocusDeskStyle.panelPadding)
+            .frame(maxWidth: .infinity, maxHeight: fillHeight ? .infinity : nil, alignment: .topLeading)
+            .background(FocusDeskStyle.groupedBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

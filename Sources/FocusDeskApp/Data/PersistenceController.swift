@@ -17,15 +17,23 @@ enum FocusDeskSchemaV2: VersionedSchema {
 enum FocusDeskSchemaV3: VersionedSchema {
     static var versionIdentifier: Schema.Version { .init(3, 0, 0) }
     static var models: [any PersistentModel.Type] {
-        [FocusTask.self, ProgressEntry.self, ActivityCategory.self, ActivityInterval.self, TrackingSession.self]
+        FocusDeskSchemaV2.models + [HistoricalModels.TrackingSession.self]
+    }
+}
+
+enum FocusDeskSchemaV4: VersionedSchema {
+    static var versionIdentifier: Schema.Version { .init(4, 0, 0) }
+    static var models: [any PersistentModel.Type] {
+        [FocusTask.self, ProgressEntry.self, ActivityCategory.self, ActivityInterval.self, TrackingSession.self, DeskProject.self]
     }
 }
 
 enum FocusDeskMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [FocusDeskSchemaV1.self, FocusDeskSchemaV2.self, FocusDeskSchemaV3.self] }
+    static var schemas: [any VersionedSchema.Type] { [FocusDeskSchemaV1.self, FocusDeskSchemaV2.self, FocusDeskSchemaV3.self, FocusDeskSchemaV4.self] }
     static var stages: [MigrationStage] {
         [.lightweight(fromVersion: FocusDeskSchemaV1.self, toVersion: FocusDeskSchemaV2.self),
-         .lightweight(fromVersion: FocusDeskSchemaV2.self, toVersion: FocusDeskSchemaV3.self)]
+         .lightweight(fromVersion: FocusDeskSchemaV2.self, toVersion: FocusDeskSchemaV3.self),
+         .lightweight(fromVersion: FocusDeskSchemaV3.self, toVersion: FocusDeskSchemaV4.self)]
     }
 }
 
@@ -35,7 +43,7 @@ enum PersistenceController {
 
     @MainActor
     static func makeModelContainer(inMemory: Bool = false, at storeURL: URL? = nil) throws -> ModelContainer {
-        let schema = Schema(versionedSchema: FocusDeskSchemaV3.self)
+        let schema = Schema(versionedSchema: FocusDeskSchemaV4.self)
         let configuration: ModelConfiguration
         if let storeURL {
             configuration = ModelConfiguration(storeName, schema: schema, url: storeURL)

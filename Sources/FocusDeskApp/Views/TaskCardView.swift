@@ -12,8 +12,61 @@ struct TaskCardView: View {
     var onSaveJournalEntry: () -> Void
     var onJournalEntryChanged: () -> Void
     var onDeleteJournalEntry: (ProgressEntry) -> Void
+    var onReturnJournalEntry: (UUID) -> Bool
+    var onCompleteNextStep: (Int, String) -> Bool
+    var compactJournal = false
+    var onJournalSwipe: (CGFloat) -> Void = { _ in }
+    @State private var showEarlier = false
+    @State private var isEditingJournal = false
 
     var body: some View {
+        journalContent
+            .frame(maxWidth: .infinity, maxHeight: compactJournal && availableWidth >= FocusDeskStyle.workspaceCompactBreakpoint ? .infinity : nil,
+                   alignment: .topLeading)
+            .background {
+                Color.clear.contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 36).onEnded { value in
+                    guard !isEditingJournal, abs(value.translation.width) > abs(value.translation.height) else { return }
+                    onJournalSwipe(value.translation.width)
+                })
+            }
+            .workspacePanel()
+            .modifier(DeskTransferTarget { (drag: DeskStepDrag) in
+                guard drag.taskID == task.id else { return false }
+                return onCompleteNextStep(drag.stepID, drag.source)
+            })
+    }
+
+    @ViewBuilder private var journalContent: some View {
+        if compactJournal {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 7) {
+                    DeskDetailHeading(title: "Journal", symbol: "book.pages")
+                    Text(task.entries.count, format: .number)
+                        .font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(FocusDeskStyle.deskAccent)
+                        .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 17)
+                        .background(FocusDeskStyle.deskAccent.opacity(0.10), in: Capsule())
+                        .accessibilityLabel(task.entries.count == 1 ? "1 journal entry" : "\(task.entries.count) journal entries")
+                    Spacer()
+                    DeskDetailEditButton(isEditing: isEditingJournal, section: "journal") {
+                        noteFocused.wrappedValue = false
+                        isEditingJournal.toggle()
+                    }
+                    .disabled(task.entries.isEmpty)
+                }
+                .frame(minHeight: 28)
+                noteInput
+                entryList
+            }
+            .onChange(of: task.entries.isEmpty) {
+                if task.entries.isEmpty { isEditingJournal = false }
+            }
+        } else {
+            expandedCard
+        }
+    }
+
+    private var expandedCard: some View {
         VStack(alignment: .leading, spacing: 28) {
             if showsHeader {
                 HStack(alignment: .top, spacing: 14) {
@@ -64,14 +117,14 @@ struct TaskCardView: View {
                 .font(FocusDeskStyle.workspaceSectionFont)
                 .frame(height: 28)
 
-            WorkDoneInputBlock(
-                task: task,
-                isSavingStep: isSavingStep,
-                noteFocused: noteFocused,
-                onDraftChanged: onDraftChanged,
-                onSaveJournalEntry: onSaveJournalEntry
-            )
+            noteInput
         }
+    }
+
+    private var noteInput: some View {
+        WorkDoneInputBlock(task: task, isSavingStep: isSavingStep, noteFocused: noteFocused,
+                           onDraftChanged: onDraftChanged, onSaveJournalEntry: onSaveJournalEntry,
+                           compact: compactJournal)
     }
 
     private var journalTimeline: some View {
@@ -80,26 +133,62 @@ struct TaskCardView: View {
                 .font(FocusDeskStyle.workspaceSectionFont)
                 .frame(height: 28)
 
-            if task.newestEntries.isEmpty {
-                Text("No journal entries yet.")
-                    .font(FocusDeskStyle.workspaceBodyFont)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            } else {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(task.newestEntries.enumerated()), id: \.element.id) { index, entry in
-                        ProgressEntryRow(
-                            entry: entry,
-                            isLast: index == task.newestEntries.count - 1,
-                            onEntryChanged: onJournalEntryChanged,
-                            onDelete: {
-                                onDeleteJournalEntry(entry)
-                            }
-                        )
+            entryList
+        }
+    }
+
+    @ViewBuilder private var entryList: some View {
+        let entries = task.newestEntries
+        if entries.isEmpty {
+            Text("No journal entries yet.")
+                .font(FocusDeskStyle.workspaceBodyFont)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        } else if compactJournal {
+            let visible = entries.prefix(showEarlier ? entries.count : 3)
+            let days = Dictionary(grouping: visible) { Calendar.current.startOfDay(for: $0.timestamp) }
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(days.keys.sorted(by: >), id: \.self) { day in
+                    HStack(spacing: 8) {
+                        Text(day, format: .dateTime.month(.abbreviated).day().year())
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                        Rectangle().fill(FocusDeskStyle.hairline).frame(height: 1)
+                            .accessibilityHidden(true)
                     }
+                    .padding(.vertical, 4)
+                    ForEach(days[day] ?? []) { entry in
+                        journalRow(entry, isLast: false)
+                    }
+                }
+                if entries.count > 3 {
+                    Button {
+                        showEarlier.toggle()
+                    } label: {
+                        Label(showEarlier ? "Show less" : "Earlier entries (\(entries.count - 3))",
+                              systemImage: showEarlier ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(FocusDeskStyle.deskAccent)
+                            .padding(.vertical, 5)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(entries) { entry in
+                    journalRow(entry, isLast: entry.id == entries.last?.id)
                 }
             }
         }
+    }
+
+    private func journalRow(_ entry: ProgressEntry, isLast: Bool) -> some View {
+        ProgressEntryRow(entry: entry, isLast: isLast, compact: compactJournal, journalEditing: isEditingJournal,
+                         onEntryChanged: onJournalEntryChanged,
+                         onDelete: { onDeleteJournalEntry(entry) },
+                         onReturn: { _ = onReturnJournalEntry(entry.id) })
     }
 }
 
@@ -110,6 +199,8 @@ private struct WorkDoneInputBlock: View {
     var noteFocused: FocusState<Bool>.Binding
     var onDraftChanged: () -> Void
     var onSaveJournalEntry: () -> Void
+    var compact = false
+    private var inputAccent: Color { compact ? FocusDeskStyle.deskAccent : .teal }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -120,13 +211,16 @@ private struct WorkDoneInputBlock: View {
                     .foregroundStyle(.primary)
                     .accessibilityLabel("What was done")
                     .focused(noteFocused)
+                    .onSubmit {
+                        if compact && hasDraft && !isSavingStep { onSaveJournalEntry() }
+                    }
                     .onChange(of: task.localDraft) {
                         task.updatedAt = Date()
                         onDraftChanged()
                     }
 
                 if task.localDraft.isEmpty {
-                    Text("What was done and where did you stop?")
+                    Text(compact ? "What was done?" : "What was done and where did you stop?")
                         .font(FocusDeskStyle.workspaceBodyFont)
                         .lineLimit(1)
                         .foregroundStyle(.tertiary)
@@ -140,7 +234,7 @@ private struct WorkDoneInputBlock: View {
             } label: {
                 Image(systemName: isSavingStep ? "clock" : "checkmark")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(hasDraft ? Color.teal : Color(nsColor: .tertiaryLabelColor))
+                    .foregroundStyle(hasDraft ? inputAccent : Color(nsColor: .tertiaryLabelColor))
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
@@ -151,7 +245,7 @@ private struct WorkDoneInputBlock: View {
         }
         .padding(.leading, 12)
         .padding(.trailing, 10)
-        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48, alignment: .center)
+        .frame(maxWidth: .infinity, minHeight: compact ? 32 : 48, maxHeight: compact ? 32 : 48, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(FocusDeskStyle.focusSurface)
@@ -159,7 +253,7 @@ private struct WorkDoneInputBlock: View {
         .overlay(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .stroke(
-                    hasDraft ? Color.teal.opacity(0.3) : FocusDeskStyle.hairline,
+                    hasDraft ? inputAccent.opacity(0.3) : FocusDeskStyle.hairline,
                     lineWidth: 1
                 )
         )
@@ -174,42 +268,51 @@ private struct WorkDoneInputBlock: View {
 private struct ProgressEntryRow: View {
     @Bindable var entry: ProgressEntry
     var isLast: Bool
+    var compact: Bool
+    var journalEditing: Bool
     var onEntryChanged: () -> Void
     var onDelete: () -> Void
+    var onReturn: () -> Void
 
     @State private var isExpanded = false
-    @State private var isEditing = false
+    @State private var isEditingRow = false
     @State private var isHovered = false
     @State private var isActionHovered = false
     @State private var rowWidth = 0.0
     @FocusState private var editorFocused: Bool
 
     private let collapsedNoteLineLimit = 3
+    private var isEditing: Bool { compact ? journalEditing : isEditingRow }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(Color.teal.opacity(0.7))
-                    .frame(width: 6, height: 6)
-                    .padding(.top, 6)
-
-                if !isLast {
-                    Rectangle()
-                        .fill(FocusDeskStyle.hairline)
-                        .frame(width: 1)
-                        .frame(maxHeight: .infinity)
-                        .padding(.top, 5)
-                }
+        if !isEditing, let taskID = entry.task?.id {
+            row.draggable(DeskJournalDrag(taskID: taskID, entryID: entry.id)) {
+                Text(entry.note).lineLimit(2).padding(6)
             }
-            .frame(width: 10)
-            .frame(minHeight: 34)
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
+        HStack(alignment: .top, spacing: compact ? 10 : 13) {
+            if compact {
+                Text(entry.timestamp, format: .dateTime.hour().minute())
+                    .font(.system(size: 11, weight: .medium)).monospacedDigit()
+                    .foregroundStyle(FocusDeskStyle.deskAccent)
+                    .frame(width: 62, alignment: .leading)
+                    .padding(.top, 1)
+            } else {
+                timelineMarker
+            }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(DateFormatting.journalString(from: entry.timestamp))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .padding(.trailing, 66)
+                if !compact {
+                    Text(DateFormatting.journalString(from: entry.timestamp))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .padding(.trailing, 80)
+                }
 
                 if isEditing {
                     noteEditor
@@ -217,7 +320,8 @@ private struct ProgressEntryRow: View {
                     MarkdownText(
                         entry.note,
                         font: FocusDeskStyle.workspaceBodyFont,
-                        lineLimit: isExpanded ? nil : collapsedNoteLineLimit
+                        lineLimit: isExpanded ? nil : collapsedNoteLineLimit,
+                        emphasisColor: compact ? FocusDeskStyle.deskAccent : nil
                     )
                     .foregroundStyle(.primary.opacity(0.82))
                     .textSelection(.enabled)
@@ -243,6 +347,7 @@ private struct ProgressEntryRow: View {
                     .padding(.top, 3)
                 }
             }
+            .padding(.trailing, compact ? (journalEditing ? 54 : 26) : 0)
         }
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,9 +368,26 @@ private struct ProgressEntryRow: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            journalActionButtons
-                .padding(.top, 7)
+            journalActionButtons.padding(.top, 7)
         }
+    }
+
+    private var timelineMarker: some View {
+        VStack(spacing: 0) {
+            Circle()
+                .fill(Color.teal.opacity(0.7))
+                .frame(width: 6, height: 6)
+                .padding(.top, 6)
+            if !isLast {
+                Rectangle()
+                    .fill(FocusDeskStyle.hairline)
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+                    .padding(.top, 5)
+            }
+        }
+        .frame(width: 10)
+        .frame(minHeight: 34)
     }
 
     private var noteEditor: some View {
@@ -296,19 +418,25 @@ private struct ProgressEntryRow: View {
 
     private var journalActionButtons: some View {
         HStack(spacing: 2) {
-            journalActionButton(
-                systemName: isEditing ? "checkmark" : "pencil",
-                help: isEditing ? "Done editing" : "Edit Journal Entry",
-                isDestructive: false,
-                action: isEditing ? endEditing : beginEditing
-            )
+            if !compact {
+                journalActionButton(
+                    systemName: isEditing ? "checkmark" : "pencil",
+                    help: isEditing ? "Done editing" : "Edit Journal Entry",
+                    isDestructive: false,
+                    action: isEditing ? endEditing : beginEditing
+                )
+            }
 
-            journalActionButton(
-                systemName: "trash",
-                help: "Delete Journal Entry",
-                isDestructive: true,
-                action: onDelete
-            )
+            journalActionButton(systemName: "arrow.uturn.backward", help: "Move to Next step",
+                                isDestructive: false, action: onReturn)
+            if journalEditing || !compact {
+                journalActionButton(
+                    systemName: "trash",
+                    help: "Delete Journal Entry",
+                    isDestructive: true,
+                    action: onDelete
+                )
+            }
         }
         .opacity(actionsVisible ? 1 : 0)
         .allowsHitTesting(actionsVisible)
@@ -334,6 +462,7 @@ private struct ProgressEntryRow: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
     }
 
     private var entryNoteBinding: Binding<String> {
@@ -354,7 +483,7 @@ private struct ProgressEntryRow: View {
 
     private func beginEditing() {
         withAnimation(.smooth(duration: 0.18)) {
-            isEditing = true
+            isEditingRow = true
             isExpanded = true
         }
 
@@ -363,7 +492,7 @@ private struct ProgressEntryRow: View {
 
     private func endEditing() {
         withAnimation(.smooth(duration: 0.18)) {
-            isEditing = false
+            isEditingRow = false
         }
 
         editorFocused = false
@@ -392,7 +521,7 @@ private struct ProgressEntryRow: View {
 
         let lineHeight = max(font.ascender - font.descender + font.leading, 1)
         let boundingRect = attributedString.boundingRect(
-            with: NSSize(width: max(1, rowWidth - 23), height: CGFloat.greatestFiniteMagnitude),
+            with: NSSize(width: max(1, rowWidth - (compact ? 72 : 23)), height: CGFloat.greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
 

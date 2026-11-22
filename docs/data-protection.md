@@ -6,11 +6,11 @@
 
 `ActivityStore` keeps a separate context. Successful commits and checkpoints schedule backups. `WorkspaceSession` coordinates restoration and refreshes the activity context and all workspace windows afterward. Do not add view-level `try? save()` calls or introduce another unsupervised writer.
 
-`BackupStore` reads committed records through a fresh context, not a cached view query. Export additionally includes pending task text from the main context, allowing text rescue when database writes fail. Local automatic writes use atomic replacement and restrictive file permissions. The exported JSON format is versioned independently of the database schema. Format 2 includes tracking sessions, their checkpoints and boundaries; format 1 is still accepted with no inferred sessions. Restore and startup close unfinished sessions at their saved checkpoints.
+`BackupStore` reads committed records through a fresh context, not a cached view query. Export additionally includes pending task text from the main context, allowing text rescue when database writes fail. Local automatic writes use atomic replacement and restrictive file permissions. The exported JSON format is versioned independently of the database schema. Format 3 includes named projects and parent task IDs. Formats 1 and 2 remain importable. Format 2 includes tracking sessions and checkpoints. Format 1 restores without inferred sessions. Restore and startup close unfinished sessions at their saved checkpoints.
 
 ## Schema changes
 
-The existing two-model task database is represented by schema 1; the four-model activity database is schema 2. Schema 3 adds tracking sessions; schemas 1 and 2 now use frozen definitions in `HistoricalModels.swift`. Both previously unversioned databases are tested against the migration plan. Entity names, relationship identity, and the legacy sort-order attribute mapping are preserved.
+The existing two-model task database is represented by schema 1; the four-model activity database is schema 2. Schema 3 adds tracking sessions. Schema 4 adds projects and optional project and parent fields on tasks. Schemas 1 through 3 use frozen definitions in `HistoricalModels.swift`. Tasks without an explicit project retain their original Desk grouping by tag. Both previously unversioned databases are tested against the migration plan. Entity names, relationship identity, and the legacy sort-order attribute mapping are preserved.
 
 Before the next structural model change, freeze the existing schema's model definitions and introduce a new version and migration stage. Do not modify historical schema definitions in place. Include a disk-based fixture migration test that checks every stored field and relationship, not just record counts.
 
@@ -18,7 +18,7 @@ SQLite startup snapshots use the public SQLite online-backup API. Copying just t
 
 ## Restore contract
 
-1. Decode and validate the entire backup before mutation. Reject unsupported versions, duplicate IDs, dangling Journal/category relationships, invalid intervals, and overlaps. Historical task references on activity may intentionally point to a deleted task.
+1. Decode and validate the entire backup before mutation. Reject unsupported versions, duplicate IDs, missing projects, dangling or circular parent tasks, dangling Journal/category relationships, invalid intervals, and overlaps. Historical task references on activity may intentionally point to a deleted task.
 2. Require explicit confirmation of replacement and show record counts.
 3. Save pending task changes and write a recovery copy. Abort if either fails.
 4. Upsert matching IDs, remove missing records, and save all changes once. Restore cached values and roll back if the save fails.

@@ -16,13 +16,15 @@ struct FocusDeskApp: App {
     @MainActor
     init() {
         #if DEBUG
-        let preview = ProcessInfo.processInfo.arguments.contains("--activity-preview") ||
-            Bundle.main.bundleIdentifier == "com.focusdesk.preview"
+        let preview = ActivityPreview.isActive
         #else
         let preview = false
         #endif
         _workspace = State(initialValue: WorkspaceBootstrap(preview: preview))
         NSApplication.shared.setActivationPolicy(.regular)
+        #if SWIFT_PACKAGE
+        NSApplication.shared.applicationIconImage = FocusDeskBrand.mark
+        #endif
     }
 
     var body: some Scene {
@@ -56,6 +58,15 @@ struct FocusDeskApp: App {
             #endif
             FocusDeskCommands(tasks: workspace.session?.tasks)
         }
+
+        #if DEBUG && !FOCUS_DESK_UPDATES
+        Settings {
+            OpenAITaskSettings()
+                .preferredColorScheme(isDarkTheme ? .dark : .light)
+        }
+        .defaultSize(width: 480, height: 340)
+        .windowResizability(.contentSize)
+        #endif
 
         Window("Task Manager", id: "task-manager") {
             workspaceContent { TaskManagerView() }

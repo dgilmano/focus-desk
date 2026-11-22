@@ -4,6 +4,13 @@ import FocusDeskCore
 import SwiftData
 import SwiftUI
 
+#if DEBUG && !FOCUS_DESK_UPDATES
+private struct VoiceNoteSession: Identifiable {
+    let id = UUID()
+    let current: VoiceTaskContext?
+}
+#endif
+
 private enum MainSection: Equatable {
     case dayMap
     case desk
@@ -31,6 +38,9 @@ struct MainDeskView: View {
 
     @Query(sort: \FocusTask.sortOrder, order: .forward)
     private var tasks: [FocusTask]
+    #if DEBUG
+    @Query(sort: \DeskProject.key) private var projects: [DeskProject]
+    #endif
 
     @AppStorage("currentTaskID")
     private var currentTaskIDRaw = ""
@@ -45,6 +55,13 @@ struct MainDeskView: View {
     @State private var sidebarDragStartWidth: Double?
     @State private var taskToDelete: FocusTask?
     @State private var showingGoogleCloudSettings = false
+    #if DEBUG
+    @State private var readDeskNotices = Set<String>()
+    #endif
+    #if DEBUG && !FOCUS_DESK_UPDATES
+    @State private var voiceSession: VoiceNoteSession?
+    @State private var voiceAPIKey = ""
+    #endif
 
     @AppStorage("sidebarWidth")
     private var sidebarWidth = 174.0
@@ -79,7 +96,6 @@ struct MainDeskView: View {
     private let collapsedSidebarWidth = 58.0
     private let collapsedSidebarBackgroundTopPadding = 62.0
     private let collapsedSidebarControlTopPadding = 74.0
-    private let workspaceHorizontalPadding = FocusDeskStyle.workspaceHorizontalPadding
 
     private var activeTasks: [FocusTask] {
         tasks
@@ -177,7 +193,6 @@ struct MainDeskView: View {
 
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(FocusDeskStyle.appBackground)
             }
             .background(FocusDeskStyle.appBackground)
             .ignoresSafeArea(edges: .top)
@@ -202,7 +217,9 @@ struct MainDeskView: View {
             normalizeSidebarWidth()
             ensureValidSelection()
             refreshWidgetSnapshot()
+            #if !DEBUG
             noteFocused = true
+            #endif
         }
         .onChange(of: activeTaskIDs) {
             ensureValidSelection()
@@ -211,6 +228,20 @@ struct MainDeskView: View {
         .onChange(of: currentTaskIDRaw) {
             refreshWidgetSnapshot()
         }
+        #if DEBUG && !FOCUS_DESK_UPDATES
+        .disabled(voiceSession != nil)
+        .accessibilityHidden(voiceSession != nil)
+        .overlayPreferenceValue(VoiceButtonAnchor.self) { anchor in
+            if let session = voiceSession, let anchor {
+                GeometryReader { geometry in
+                    VoiceTaskWidget(current: session.current, apiKey: $voiceAPIKey,
+                                    buttonBounds: geometry[anchor], available: geometry.size,
+                                    save: saveVoiceTask, dismiss: { voiceSession = nil })
+                        .id(session.id)
+                }
+            }
+        }
+        #endif
         .sheet(isPresented: $showingGoogleCloudSettings) {
             GoogleCloudSettingsView(
                 oauthClientID: $googleOAuthClientID,
@@ -236,7 +267,7 @@ struct MainDeskView: View {
     private var sidebar: some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(FocusDeskStyle.sidebarBackground)
+                .fill(FocusDeskStyle.groupedBackground)
                 .padding(.leading, 4)
                 .padding(.top, 4)
                 .padding(.bottom, 8)
@@ -244,13 +275,19 @@ struct MainDeskView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Focus Desk")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                            .padding(.horizontal, 14)
-                            .padding(.top, 48)
+                        HStack(spacing: 6) {
+                            Image(nsImage: FocusDeskBrand.mark)
+                                .resizable().interpolation(.high)
+                                .frame(width: 28, height: 28)
+                                .accessibilityHidden(true)
+                            Text("Focus Desk")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                        .padding(.leading, 8)
+                        .padding(.top, 42)
 
                         FocusDeskSidebarSection(title: "Focus") {
                             FocusDeskSidebarButton(
@@ -374,7 +411,7 @@ struct MainDeskView: View {
     private var collapsedSidebar: some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(FocusDeskStyle.sidebarBackground)
+                .fill(FocusDeskStyle.groupedBackground)
                 .padding(.leading, 4)
                 .padding(.top, collapsedSidebarBackgroundTopPadding)
                 .padding(.bottom, 8)
@@ -678,45 +715,82 @@ struct MainDeskView: View {
     }
 
     private var detail: some View {
-        VStack(spacing: 0) {
-            detailToolbar
-
-            Group {
-                switch selectedSection {
-                case .dayMap:
-                    ActivityWorkspaceView(selectedDate: $selectedActivityDate)
-                        .transition(.opacity)
-                case .desk:
-                    if let task = currentTask {
-                        taskWorkspace(task)
+        ScrollViewReader { scroll in
+            VStack(spacing: 0) {
+                Group {
+                    #if DEBUG
+                    if selectedSection == .desk {
+                        DeskToolbar(
+                            tasks: activeTasks, projectNames: projects.map(\.name), currentTaskID: currentTask?.id,
+                            isDarkTheme: $isDarkTheme, readNotices: $readDeskNotices,
+                            voiceNote: {
+                                #if !FOCUS_DESK_UPDATES
+                                voiceSession = VoiceNoteSession(current: currentTask.map(VoiceTaskContext.init))
+                                #endif
+                            },
+                            newTask: { selectedSection = .newTask },
+                            addJournalEntry: {
+                                guard let task = currentTask else { return }
+                                scroll.scrollTo("journal-" + task.id.uuidString, anchor: .center)
+                                noteFocused = true
+                            },
+                            selectTask: select, previousTask: selectPreviousTask, nextTask: selectNextTask
+                        )
                     } else {
-                        EmptyDeskView {
-                            selectedSection = .newTask
-                        }
+                        detailToolbar
                     }
-                case .newTask:
-                    newTaskWorkspace
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                case .tasks:
-                    manageWorkspace(.tasks)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                case .completed:
-                    manageWorkspace(.completed)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                case .summary:
-                    summaryWorkspace
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                case .allTags:
-                    manageWorkspace(.allTags)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                case let .tag(normalizedName):
-                    manageWorkspace(.tag(normalizedName))
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    #else
+                    detailToolbar
+                    #endif
+                }
+                .padding(selectedSection == .desk ? FocusDeskStyle.deskInsets : FocusDeskStyle.workspaceInsets)
+                .padding(.top, 30)
+                .background {
+                    Color.clear.contentShape(Rectangle()).onTapGesture(count: 2, perform: toggleWindowZoom)
+                }
+
+                sectionContent.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sectionContent: some View {
+        switch selectedSection {
+        case .dayMap:
+            ActivityWorkspaceView(selectedDate: $selectedActivityDate)
+                .transition(.opacity)
+        case .desk:
+            if let task = currentTask {
+                #if DEBUG
+                openDeskWorkspace(task)
+                #else
+                taskWorkspace(task)
+                #endif
+            } else {
+                EmptyDeskView {
+                    selectedSection = .newTask
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .newTask:
+            newTaskWorkspace
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+        case .tasks:
+            manageWorkspace(.tasks)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+        case .completed:
+            manageWorkspace(.completed)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+        case .summary:
+            summaryWorkspace
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+        case .allTags:
+            manageWorkspace(.allTags)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+        case let .tag(normalizedName):
+            manageWorkspace(.tag(normalizedName))
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
         }
-        .background(selectedSection == .dayMap || selectedSection == .desk ? FocusDeskStyle.workspaceBackground : FocusDeskStyle.appBackground)
     }
 
     private var detailToolbar: some View {
@@ -763,14 +837,7 @@ struct MainDeskView: View {
                 isDarkTheme.toggle()
             }
         }
-        .padding(.leading, workspaceHorizontalPadding)
-        .padding(.trailing, workspaceHorizontalPadding)
-        .padding(.top, 30)
         .padding(.bottom, 18)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            toggleWindowZoom()
-        }
     }
 
     private func toolbarIconButton(
@@ -785,7 +852,7 @@ struct MainDeskView: View {
                 .frame(width: 42, height: 42)
                 .background(
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(FocusDeskStyle.focusSurface)
+                        .fill(FocusDeskStyle.groupedBackground)
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
@@ -857,7 +924,7 @@ struct MainDeskView: View {
 
     private var summaryWorkspace: some View {
         GeometryReader { proxy in
-            let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
+            let contentWidth = FocusDeskStyle.workspaceContentWidth(for: proxy.size.width)
 
             ScrollView {
                 TimelineView(.periodic(from: .now, by: 30)) { timeline in
@@ -875,7 +942,7 @@ struct MainDeskView: View {
                         }
                     )
                     .frame(minWidth: contentWidth, maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, workspaceHorizontalPadding)
+                    .padding(FocusDeskStyle.workspaceInsets)
                     .padding(.top, 34)
                     .padding(.bottom, 28)
                     .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .topLeading)
@@ -886,7 +953,7 @@ struct MainDeskView: View {
 
     private var newTaskWorkspace: some View {
         GeometryReader { proxy in
-            let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
+            let contentWidth = FocusDeskStyle.workspaceContentWidth(for: proxy.size.width)
 
             ScrollView {
                 NewTaskWorkspaceView(
@@ -899,7 +966,7 @@ struct MainDeskView: View {
                     }
                 )
                 .frame(minWidth: contentWidth, maxWidth: .infinity, alignment: .topLeading)
-                .padding(.horizontal, workspaceHorizontalPadding)
+                .padding(FocusDeskStyle.workspaceInsets)
                 .padding(.top, 34)
                 .padding(.bottom, 28)
                 .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .topLeading)
@@ -909,7 +976,7 @@ struct MainDeskView: View {
 
     private func manageWorkspace(_ mode: ManageWorkspaceMode) -> some View {
         GeometryReader { proxy in
-            let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
+            let contentWidth = FocusDeskStyle.workspaceContentWidth(for: proxy.size.width)
 
             ScrollView {
                 ManageWorkspaceView(
@@ -933,7 +1000,7 @@ struct MainDeskView: View {
                     }
                 )
                 .frame(minWidth: contentWidth, maxWidth: .infinity, alignment: .topLeading)
-                .padding(.horizontal, workspaceHorizontalPadding)
+                .padding(FocusDeskStyle.workspaceInsets)
                 .padding(.top, 34)
                 .padding(.bottom, 28)
                 .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .topLeading)
@@ -941,67 +1008,110 @@ struct MainDeskView: View {
         }
     }
 
+    private func taskInspector(_ task: FocusTask, width: CGFloat, compact: Bool = false) -> some View {
+        TaskFocusSummaryView(task: task, availableWidth: width, availableTags: availableTagRecords,
+                             onTaskChanged: saveContext, onComplete: { complete(task) },
+                             onCompleteNextStep: { completeStep($0, from: $1, in: task) },
+                             onReturnJournalEntry: { returnEntry($0, to: task) }, compactInspector: compact,
+                             parentTask: task.parentTaskID.flatMap { id in tasks.first { $0.id == id } },
+                             subtasks: tasks.filter { $0.parentTaskID == task.id }, selectRelated: select)
+    }
+
+    private func taskJournal(_ task: FocusTask, width: CGFloat, compact: Bool = false) -> some View {
+        TaskCardView(task: task, availableWidth: width, showsHeader: false, isSavingStep: isSavingStep,
+                     noteFocused: $noteFocused, onDraftChanged: saveContext,
+                     onSaveJournalEntry: { saveJournalEntry(task) },
+                     onJournalEntryChanged: {
+                         task.updatedAt = Date()
+                         saveContext()
+                         refreshWidgetSnapshot()
+                     },
+                     onDeleteJournalEntry: { deleteJournalEntry($0, from: task) },
+                     onReturnJournalEntry: { returnEntry($0, to: task) },
+                     onCompleteNextStep: { completeStep($0, from: $1, in: task) }, compactJournal: compact,
+                     onJournalSwipe: { distance in
+                         if distance < -42 { selectNextTask() }
+                         if distance > 42 { selectPreviousTask() }
+                     })
+    }
+
+    #if DEBUG
+    private func openDeskWorkspace(_ task: FocusTask) -> some View {
+        GeometryReader { proxy in
+            let width = max(1, FocusDeskStyle.workspaceContentWidth(for: proxy.size.width, insets: FocusDeskStyle.deskInsets))
+            let mapWidth = max(1, width - 2 * FocusDeskStyle.panelPadding)
+            ScrollView {
+                VStack(alignment: .leading, spacing: FocusDeskStyle.deskPanelSpacing) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(spacing: 18) {
+                            deskMetric("Open tasks", activeTasks.count)
+                            deskMetric("Completed", completedTasks.count)
+                            deskMetric("Journal entries", tasks.reduce(0) { $0 + $1.entries.count })
+                        }
+                        DeskTaskMap(tasks: activeTasks, projects: projects.map(\.name), selectedID: task.id, width: mapWidth, onTaskRenamed: refreshWidgetSnapshot) { id in
+                            noteFocused = false
+                            currentTaskIDRaw = id.uuidString
+                        }
+                    }
+                    .workspacePanel()
+                    DeskDetailColumns(width: width) {
+                        taskInspector(task, width: width, compact: true)
+                            .id("inspector-" + task.id.uuidString)
+                    } journal: {
+                        taskJournal(task, width: width, compact: true)
+                            .id("journal-" + task.id.uuidString)
+                    }
+                }
+                .frame(width: width, alignment: .topLeading)
+                .padding(FocusDeskStyle.deskInsets)
+                .padding(.bottom, FocusDeskStyle.deskPanelSpacing)
+            }
+        }
+    }
+
+    private func deskMetric(_ label: String, _ count: Int) -> some View {
+        HStack(spacing: 5) {
+            Text(label).foregroundStyle(.secondary)
+            Text(count, format: .number).fontWeight(.semibold).monospacedDigit()
+        }
+        .font(.system(size: 11)).accessibilityElement(children: .combine)
+    }
+    #endif
+
     private func taskWorkspace(_ task: FocusTask) -> some View {
         GeometryReader { proxy in
-            let contentWidth = max(0, proxy.size.width - (workspaceHorizontalPadding * 2))
+            let contentWidth = FocusDeskStyle.workspaceContentWidth(for: proxy.size.width, insets: FocusDeskStyle.deskInsets)
+            let innerWidth = max(0, contentWidth - 2 * FocusDeskStyle.panelPadding)
             ScrollView {
-                VStack(spacing: 28) {
-                    TaskFocusSummaryView(
-                        task: task,
-                        availableWidth: contentWidth,
-                        availableTags: availableTagRecords,
-                        onTaskChanged: saveContext,
-                        onComplete: {
-                            complete(task)
-                        }
-                    )
+                VStack(spacing: FocusDeskStyle.deskPanelSpacing) {
+                    taskInspector(task, width: innerWidth)
                         .id("summary-\(task.id.uuidString)")
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
                         .zIndex(1)
 
-                    TaskCardView(
-                        task: task,
-                        availableWidth: contentWidth,
-                        showsHeader: false,
-                        isSavingStep: isSavingStep,
-                        noteFocused: $noteFocused,
-                        onDraftChanged: saveContext,
-                        onSaveJournalEntry: {
-                            saveJournalEntry(task)
-                        },
-                        onJournalEntryChanged: {
-                            task.updatedAt = Date()
-                            saveContext()
-                            refreshWidgetSnapshot()
-                        },
-                        onDeleteJournalEntry: { entry in
-                            deleteJournalEntry(entry, from: task)
-                        }
-                    )
+                    taskJournal(task, width: innerWidth)
                     .id(task.id)
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)
                     ))
-                    .gesture(
-                        DragGesture(minimumDistance: 36)
-                            .onEnded { value in
-                                if value.translation.width <= -42 {
-                                    selectNextTask()
-                                } else if value.translation.width >= 42 {
-                                    selectPreviousTask()
-                                }
-                            }
-                    )
                 }
                 .frame(width: contentWidth, alignment: .topLeading)
-                .padding(.horizontal, workspaceHorizontalPadding)
-                .padding(.top, FocusDeskStyle.workspaceTopPadding)
-                .padding(.bottom, 28)
+                .padding(FocusDeskStyle.deskInsets)
+                .padding(.bottom, FocusDeskStyle.deskPanelSpacing)
                 .frame(minWidth: proxy.size.width, maxWidth: .infinity, alignment: .top)
             }
         }
     }
+
+    #if DEBUG && !FOCUS_DESK_UPDATES
+    private func saveVoiceTask(_ draft: VoiceTaskReview, target: VoiceTaskContext?) throws -> VoiceTaskContext? {
+        guard let task = try taskStore.saveVoiceReview(draft, target: target) else { return nil }
+        select(task.id)
+        refreshWidgetSnapshot()
+        return VoiceTaskContext(task)
+    }
+    #endif
 
     @discardableResult private func createTask(_ draft: NewTaskDraft) -> Bool {
         createTask(
@@ -1078,6 +1188,18 @@ struct MainDeskView: View {
             }
             isSavingStep = false
         }
+    }
+
+    private func completeStep(_ id: Int, from source: String, in task: FocusTask) -> Bool {
+        guard taskStore.completeNextStep(id, in: task, from: source) else { return false }
+        refreshWidgetSnapshot()
+        return true
+    }
+
+    private func returnEntry(_ id: UUID, to task: FocusTask) -> Bool {
+        guard taskStore.moveJournalEntryToNextStep(id, in: task) else { return false }
+        refreshWidgetSnapshot()
+        return true
     }
 
     private func deleteJournalEntry(_ entry: ProgressEntry, from task: FocusTask) {
@@ -2517,7 +2639,7 @@ private struct NewTaskWorkspaceView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.62))
+                    .fill(FocusDeskStyle.focusSurface)
             )
 
             Spacer(minLength: 8)
@@ -2529,7 +2651,7 @@ private struct NewTaskWorkspaceView: View {
         .frame(maxWidth: .infinity, minHeight: panelHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(FocusDeskStyle.groupedBackground.opacity(0.78))
+                .fill(FocusDeskStyle.groupedBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -2561,7 +2683,7 @@ private struct NewTaskWorkspaceView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.66))
+                    .fill(FocusDeskStyle.focusSurface)
             )
 
             Spacer(minLength: 8)
@@ -2570,7 +2692,7 @@ private struct NewTaskWorkspaceView: View {
         .frame(maxWidth: .infinity, minHeight: panelHeight, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(FocusDeskStyle.sidebarBackground)
+                .fill(FocusDeskStyle.groupedBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
@@ -2599,7 +2721,7 @@ private struct NewTaskWorkspaceView: View {
         .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(FocusDeskStyle.sidebarBackground)
+                .fill(FocusDeskStyle.groupedBackground)
         )
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }

@@ -106,3 +106,20 @@ final class ActivityInterval {
 
 }
 }
+
+extension HistoricalModels {
+    // Added in schema 3.
+    @Model final class TrackingSession {
+        @Attribute(.unique) var id: UUID
+        var startedAt: Date
+        var endedAt: Date?
+        var lastObservedAt: Date
+
+        init(id: UUID, start: Date, end: Date?, lastObservedAt: Date) {
+            self.id = id
+            self.startedAt = start
+            self.endedAt = end
+            self.lastObservedAt = lastObservedAt
+        }
+    }
+}

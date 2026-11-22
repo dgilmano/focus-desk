@@ -12,10 +12,26 @@
     <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key><string>com.focusdesk.next-step</string>
+            <key>UTTypeDescription</key><string>Focus Desk next step</string>
+            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key><string>com.focusdesk.journal-entry</string>
+            <key>UTTypeDescription</key><string>Focus Desk journal entry</string>
+            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+        </dict>
+    </array>
     <key>LSMinimumSystemVersion</key><string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>LSRequiresNativeExecution</key><true/>
     <key>LSArchitecturePriority</key><array><string>arm64</string></array>
     <key>NSHighResolutionCapable</key><true/>
+#if FOCUS_DESK_VOICE
+    <key>NSMicrophoneUsageDescription</key><string>Record a voice note to draft tasks and next steps.</string>
+#endif
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSHumanReadableCopyright</key><string>Copyright 2026 Damir Gilmano</string>
 #if FOCUS_DESK_UPDATES

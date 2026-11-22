@@ -5,17 +5,16 @@ struct ActivityWorkspaceView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let contentWidth = max(0, geometry.size.width - FocusDeskStyle.workspaceHorizontalPadding * 2)
+            let contentWidth = FocusDeskStyle.workspaceContentWidth(for: geometry.size.width)
+            let innerWidth = max(0, contentWidth - FocusDeskStyle.panelPadding * 2)
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    TimelineView(.periodic(from: .now, by: 30)) { timeline in
-                        ActivityDayMapView(selectedDate: $selectedDate, now: timeline.date,
-                                           availableWidth: contentWidth)
-                    }
+                TimelineView(.periodic(from: .now, by: 30)) { timeline in
+                    ActivityDayMapView(selectedDate: $selectedDate, now: timeline.date,
+                                       availableWidth: innerWidth)
                 }
+                .workspacePanel()
                 .frame(width: contentWidth, alignment: .leading)
-                .padding(.horizontal, FocusDeskStyle.workspaceHorizontalPadding)
-                .padding(.top, FocusDeskStyle.workspaceTopPadding)
+                .padding(FocusDeskStyle.workspaceInsets)
                 .padding(.bottom, 28)
             }
         }

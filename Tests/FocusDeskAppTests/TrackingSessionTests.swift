@@ -148,28 +148,31 @@ final class TrackingSessionTests: XCTestCase {
         XCTAssertTrue(try restored.mainContext.fetch(FetchDescriptor<TrackingSession>()).isEmpty)
     }
 
-    func testSchemaTwoMigrationPreservesEveryFieldAndRelationship() throws {
-        for versioned in [false, true] {
+    func testHistoricalMigrationsPreserveEveryFieldAndRelationship() throws {
+        for version in [0, 2, 3] {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: directory) }
             let url = directory.appendingPathComponent("Old.store")
-            let expected = try makeOldStore(at: url, versioned: versioned)
+            let expected = try makeOldStore(at: url, version: version)
             let migrated = try PersistenceController.makeModelContainer(at: url)
             let actual = try WorkspaceBackup.capture(from: ModelContext(migrated))
             XCTAssertEqual(actual.tasks, expected.tasks)
             XCTAssertEqual(actual.entries, expected.entries)
             XCTAssertEqual(actual.categories, expected.categories)
             XCTAssertEqual(actual.intervals, expected.intervals)
-            XCTAssertEqual(actual.trackingSessions, [])
+            XCTAssertEqual(actual.trackingSessions, expected.trackingSessions)
+            XCTAssertEqual(actual.projects, [])
         }
     }
 
-    private func makeOldStore(at url: URL, versioned: Bool) throws -> WorkspaceBackup {
-        // The exact four-model layout shipped before tracking sessions.
-        let schema = versioned ? Schema(versionedSchema: FocusDeskSchemaV2.self)
-            : Schema([HistoricalModels.FocusTask.self, HistoricalModels.ProgressEntry.self,
-                      HistoricalModels.ActivityCategory.self, HistoricalModels.ActivityInterval.self])
+    private func makeOldStore(at url: URL, version: Int) throws -> WorkspaceBackup {
+        let schema: Schema
+        switch version {
+        case 3: schema = Schema(versionedSchema: FocusDeskSchemaV3.self)
+        case 2: schema = Schema(versionedSchema: FocusDeskSchemaV2.self)
+        default: schema = Schema(FocusDeskSchemaV2.models)
+        }
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
         let context = ModelContext(container)
         let start = Date(timeIntervalSince1970: 1700000000)
@@ -182,6 +185,11 @@ final class TrackingSessionTests: XCTestCase {
         let interval = HistoricalModels.ActivityInterval(categoryID: category.id, start: start,
             end: start.addingTimeInterval(90), taskID: task.id, taskTitle: task.title)
         context.insert(task); context.insert(entry); context.insert(category); context.insert(interval)
+        let sessionID = UUID()
+        if version == 3 {
+            context.insert(HistoricalModels.TrackingSession(id: sessionID, start: start, end: start.addingTimeInterval(200),
+                                                           lastObservedAt: start.addingTimeInterval(180)))
+        }
         try context.save()
         // Build portable expected values without reading the upgraded store.
         let copy = try PersistenceController.makeModelContainer(inMemory: true)
@@ -194,6 +202,11 @@ final class TrackingSessionTests: XCTestCase {
         copy.mainContext.insert(newTask)
         copy.mainContext.insert(ProgressEntry(id: entry.id, note: entry.note, timestamp: entry.timestamp, task: newTask))
         copy.mainContext.insert(newCategory)
+        if version == 3 {
+            let session = TrackingSession(id: sessionID, start: start, end: start.addingTimeInterval(200))
+            session.lastObservedAt = start.addingTimeInterval(180)
+            copy.mainContext.insert(session)
+        }
         copy.mainContext.insert(ActivityInterval(id: interval.id, categoryID: interval.categoryID, start: interval.startedAt,
             end: interval.endedAt, taskID: interval.taskID, taskTitle: interval.taskTitle))
         try copy.mainContext.save()

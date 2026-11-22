@@ -1,6 +1,13 @@
 import FocusDeskCore
 import SwiftUI
 
+private enum DeskInspectorTab: String, CaseIterable {
+    case next = "Next step"
+    case why = "Why it matters"
+
+    var symbol: String { self == .next ? "arrow.turn.down.right" : "sparkle" }
+}
+
 struct TaskFocusSummaryView: View {
     @Bindable var task: FocusTask
 
@@ -8,6 +15,15 @@ struct TaskFocusSummaryView: View {
     var availableTags: [TaskTagRecord]
     var onTaskChanged: () -> Void
     var onComplete: () -> Void
+    var onCompleteNextStep: (NextStepChecklist.Item.ID, String) -> Bool
+    var onReturnJournalEntry: (UUID) -> Bool
+    var compactInspector = false
+    var parentTask: FocusTask?
+    var subtasks: [FocusTask] = []
+    var selectRelated: (UUID) -> Void = { _ in }
+    @State private var inspectorTab = DeskInspectorTab.next
+    @Namespace private var tabIndicator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isEditingCurrentTask = false
     @State private var isEditingMotivation = false
@@ -22,12 +38,138 @@ struct TaskFocusSummaryView: View {
     @FocusState private var nextStepEditorFocused: Bool
 
     var body: some View {
+        Group {
+            if compactInspector { inspector } else { expandedSummary }
+        }
+        .workspacePanel(fillHeight: compactInspector && availableWidth >= FocusDeskStyle.workspaceCompactBreakpoint)
+        .modifier(DeskTransferTarget { (drag: DeskJournalDrag) in
+            guard drag.taskID == task.id, onReturnJournalEntry(drag.entryID) else { return false }
+            inspectorTab = .next
+            return true
+        })
+    }
+
+    private var expandedSummary: some View {
         WorkspaceColumns(availableWidth: availableWidth) {
             currentTaskColumn
         } trailing: {
             nextStepPanel
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var inspector: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                DeskDetailHeading(title: "Current task", symbol: "scope")
+                Spacer()
+                DeskDetailEditButton(isEditing: isEditingCurrentTask, section: "current task") {
+                    if isEditingCurrentTask { endCurrentTaskEditing() } else { beginCurrentTaskEditing() }
+                }
+            }
+            .frame(minHeight: 28)
+            if isEditingCurrentTask {
+                inspectorFields
+            } else {
+                taskTitleBlock
+                if let name = task.projectName, !name.isEmpty {
+                    Label(name, systemImage: "folder").font(.caption).foregroundStyle(.secondary)
+                }
+                if let parentTask {
+                    relatedTask(parentTask, symbol: "arrow.turn.left.up", prefix: "Parent")
+                }
+                if !subtasks.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Subtasks").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        ForEach(subtasks) { child in
+                            relatedTask(child, symbol: child.completedAt == nil ? "circle" : "checkmark.circle.fill", prefix: nil)
+                        }
+                    }
+                }
+                TaskTagsView(task: task, availableTags: availableTags, onTagsChanged: onTaskChanged, isEditing: false)
+                inspectorMenu
+                inspectorTabContent
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func relatedTask(_ related: FocusTask, symbol: String, prefix: String?) -> some View {
+        Button { selectRelated(related.id) } label: {
+            Label(prefix.map { "\($0) · \(related.title)" } ?? related.title, systemImage: symbol)
+                .lineLimit(2)
+        }
+        .buttonStyle(.plain).font(.callout)
+        .disabled(related.completedAt != nil)
+        .accessibilityValue(related.completedAt == nil ? "Open" : "Completed")
+    }
+
+    private var inspectorFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            currentTaskEditor
+            VStack(alignment: .leading, spacing: 5) {
+                inspectorEditorLabel("Tags")
+                TaskTagsView(task: task, availableTags: availableTags, onTagsChanged: onTaskChanged)
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                inspectorEditorLabel("Next step")
+                nextStepEditor
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                inspectorEditorLabel("Why it matters")
+                motivationEditor
+            }
+            Divider()
+            Button(action: onComplete) {
+                Label("Mark task as complete", systemImage: "checkmark.circle")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    @ViewBuilder
+    private var inspectorTabContent: some View {
+        if inspectorTab == .next {
+            nextStepContent
+        } else {
+            MarkdownText(motivationText, font: FocusDeskStyle.workspaceBodyFont, emphasisColor: FocusDeskStyle.deskAccent)
+                .foregroundStyle(currentMotivation.isEmpty ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+    }
+
+    private var inspectorMenu: some View {
+        HStack(spacing: 14) {
+            ForEach(DeskInspectorTab.allCases, id: \.self) { tab in
+                let selected = tab == inspectorTab
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) { inspectorTab = tab }
+                } label: {
+                    Label(tab.rawValue, systemImage: tab.symbol)
+                        .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? FocusDeskStyle.deskAccent : Color.secondary)
+                        .frame(height: 29)
+                        .overlay(alignment: .bottom) {
+                            if selected {
+                                Capsule().fill(FocusDeskStyle.deskAccent).frame(height: 2)
+                                    .matchedGeometryEffect(id: "selected", in: tabIndicator)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+        .background(alignment: .bottom) { Divider() }
+    }
+
+    private func inspectorEditorLabel(_ title: String) -> some View {
+        Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
     }
 
     private var currentTaskColumn: some View {
@@ -62,9 +204,9 @@ struct TaskFocusSummaryView: View {
     }
 
     private var taskTitleBlock: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: compactInspector ? 5 : 14) {
             Text(task.title)
-                .font(.system(size: 28, weight: .semibold))
+                .font(.system(size: compactInspector ? 14 : 28, weight: .semibold))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .truncationMode(.tail)
@@ -73,7 +215,8 @@ struct TaskFocusSummaryView: View {
             if !task.details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 MarkdownText(
                     task.details,
-                    font: FocusDeskStyle.workspaceBodyFont
+                    font: FocusDeskStyle.workspaceBodyFont,
+                    emphasisColor: compactInspector ? FocusDeskStyle.deskAccent : nil
                 )
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -171,86 +314,63 @@ struct TaskFocusSummaryView: View {
             } else {
                 nextStepContent
             }
-
-            Text(nextStepMetadata)
-                .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .allowsTightening(true)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .contentShape(Rectangle())
     }
 
     private var nextStepContent: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if currentNextStep.isEmpty {
+        let source = currentNextStep
+        let checklist = NextStepChecklist(source)
+        let nextID = checklist.items.first { !$0.isCompleted }?.id
+        return VStack(alignment: .leading, spacing: 0) {
+            if checklist.items.isEmpty {
                 Text("Add a next step.")
                     .font(FocusDeskStyle.workspaceBodyFont)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-            } else {
-                activeNextStepRow
-
-                nextStepDivider
-
-                if !remainingNextStepsText.isEmpty {
-                    MarkdownText(
-                        remainingNextStepsText,
-                        font: FocusDeskStyle.workspaceBodyFont
-                    )
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(checklist.items) { item in
+                let isNext = item.id == nextID
+                let status = item.isCompleted ? "Completed" : (isNext ? "Next" : "Upcoming")
+                if item.id != checklist.items.first?.id {
+                    Divider().accessibilityHidden(true)
+                }
+                HStack(spacing: 8) {
+                    Button {
+                        _ = onCompleteNextStep(item.id, source)
+                    } label: {
+                        Image(systemName: item.isCompleted ? "checkmark.circle.fill" : (isNext ? "smallcircle.filled.circle" : "circle"))
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(isNext ? Color.primary : Color.secondary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Step " + String(item.id + 1) + ", " + item.text)
+                    .accessibilityValue(status)
+                    .help(item.isCompleted ? "Move completed step to Journal" : "Complete step and move to Journal")
+                    MarkdownText(item.text, font: FocusDeskStyle.workspaceBodyFont.weight(isNext ? .semibold : .regular))
+                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                        .strikethrough(item.isCompleted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                    if isNext && !compactInspector {
+                        Button(action: beginNextStepEditing) {
+                            Image(systemName: "arrow.right").frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain).accessibilityLabel("Edit next step").help("Edit next step")
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .draggable(DeskStepDrag(taskID: task.id, stepID: item.id, source: source)) {
+                    Text(item.text).lineLimit(2).padding(6)
                 }
             }
         }
-        .textSelection(.enabled)
-    }
-
-    private var nextStepDivider: some View {
-        Rectangle()
-            .fill(FocusDeskStyle.hairline)
-            .frame(height: 1)
-            .padding(.top, -2)
-            .padding(.bottom, 2)
-    }
-
-    private var activeNextStepRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            MarkdownText(
-                activeNextStepText,
-                font: FocusDeskStyle.workspaceBodyFont
-            )
-            .foregroundStyle(.primary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 8)
-
-            Button {
-                beginNextStepEditing()
-            } label: {
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.teal)
-                    .frame(width: 26, height: 26)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.teal.opacity(0.10))
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Edit Next Step")
-        }
-        .padding(.leading, 14)
-        .padding(.trailing, 9)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.teal.opacity(0.05))
-        )
-        .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Color.teal.opacity(0.18)) }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var nextStepEditor: some View {
@@ -260,7 +380,7 @@ struct TaskFocusSummaryView: View {
                 .foregroundStyle(.primary)
                 .scrollContentBackground(.hidden)
                 .padding(8)
-                .frame(height: 180)
+                .frame(height: compactInspector ? 58 : 180)
                 .focused($nextStepEditorFocused)
                 .accessibilityLabel("Edit next step")
 
@@ -283,7 +403,7 @@ struct TaskFocusSummaryView: View {
                 .foregroundStyle(.primary)
                 .scrollContentBackground(.hidden)
                 .padding(8)
-                .frame(height: 100)
+                .frame(height: compactInspector ? 58 : 100)
                 .focused($motivationEditorFocused)
                 .accessibilityLabel("Edit why it matters")
 
@@ -301,20 +421,22 @@ struct TaskFocusSummaryView: View {
 
     private var currentTaskEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if compactInspector { inspectorEditorLabel("Title") }
             TextField("Current task", text: currentTaskTitleBinding)
                 .textFieldStyle(.plain)
-                .font(.system(size: 28, weight: .semibold))
+                .font(.system(size: compactInspector ? 14 : 28, weight: .semibold))
                 .foregroundStyle(.primary)
                 .focused($currentTaskTitleFocused)
                 .accessibilityLabel("Edit current task title")
 
+            if compactInspector { inspectorEditorLabel("Details") }
             ZStack(alignment: .topLeading) {
                 TextEditor(text: currentTaskDetailsBinding)
                     .font(FocusDeskStyle.workspaceBodyFont)
                     .foregroundStyle(.secondary)
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .frame(height: 100)
+                    .frame(height: compactInspector ? 58 : 100)
                     .focused($currentTaskDetailsFocused)
                     .accessibilityLabel("Edit current task details")
 
@@ -361,6 +483,7 @@ struct TaskFocusSummaryView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(help)
         .help(help)
         .opacity(isVisible ? 1 : 0)
         .allowsHitTesting(isVisible)
@@ -384,6 +507,7 @@ struct TaskFocusSummaryView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(help)
         .help(help)
     }
 
@@ -523,36 +647,5 @@ struct TaskFocusSummaryView: View {
 
     private var motivationText: String {
         currentMotivation.isEmpty ? "Add why this task matters." : currentMotivation
-    }
-
-    private var nextStepLines: [String] {
-        currentNextStep
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
-    private var activeNextStepText: String {
-        nextStepLines.first ?? currentNextStep
-    }
-
-    private var remainingNextStepsText: String {
-        guard nextStepLines.count > 1 else {
-            return ""
-        }
-
-        return nextStepLines.dropFirst().joined(separator: "\n")
-    }
-
-    private var nextStepMetadata: String {
-        if currentNextStep.isEmpty {
-            return "No next step yet"
-        }
-
-        if nextStepLines.count <= 1 {
-            return "Current move"
-        }
-
-        return "\(nextStepLines.count - 1) remaining"
     }
 }

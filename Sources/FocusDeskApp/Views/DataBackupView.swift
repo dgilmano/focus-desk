@@ -38,7 +38,7 @@ struct DataBackupView: View {
                     NSWorkspace.shared.open(session.backups.directory)
                 }
             }
-            Text("Backup files contain your tasks, journal, tags and Day tracker. They are not encrypted.")
+            Text("Backup files contain your projects, tasks, journal, tags and Day tracker. They are not encrypted.")
                 .font(.callout).foregroundStyle(.secondary)
             Text("Local backups do not protect against losing this Mac. Keep an exported copy in a separate safe location.")
                 .font(.callout).foregroundStyle(.secondary)
@@ -73,7 +73,7 @@ struct DataBackupView: View {
             }
         } message: {
             if let backup = pendingBackup {
-                Text("This backup contains \(backup.tasks.count) tasks, \(backup.entries.count) journal entries \(backup.intervals.count) activity intervals and \((backup.trackingSessions ?? []).count) tracking sessions. Current data will be replaced after a recovery copy is saved. Active recording will stop.")
+                Text("This backup contains \((backup.projects ?? []).count) projects, \(backup.tasks.count) tasks, \(backup.entries.count) journal entries, \(backup.intervals.count) activity intervals and \((backup.trackingSessions ?? []).count) tracking sessions. Current data will be replaced after a recovery copy is saved. Active recording will stop.")
             }
         }
     }

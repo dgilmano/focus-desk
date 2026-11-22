@@ -1,17 +1,29 @@
 #if DEBUG
 import Foundation
 import SwiftData
+import FocusDeskCore
 
 // Isolated, in-memory data for visual checks; never used in release builds.
 @MainActor
 enum ActivityPreview {
+    static var isActive: Bool {
+        ProcessInfo.processInfo.arguments.contains("--activity-preview") || Bundle.main.bundleIdentifier == "com.focusdesk.preview"
+    }
+
+    // Re-create the same sample tasks across launches so UI preferences remain usable in the preview.
+    private static func sampleID(_ index: Int) -> UUID {
+        UUID(uuid: (0xF0, 0xC0, 0xDE, 0x51, 0x11, 0xED, 0x42, 0x17, 0xAB, 0x04, 0, 0, 0, 0, 0, UInt8(index)))
+    }
+
     static func seed(container: ModelContainer, store: ActivityStore) {
         let context = container.mainContext
-        let task = FocusTask(title: "Build a calmer working day", sortOrder: 0,
-                             motivation: "Make room for focused work, learning and proper breaks.",
-                             nextStep: "Review today's activity and choose the next useful step.")
+        let task = FocusTask(id: sampleID(0), title: "Build a calmer working day", sortOrder: 0,
+                             motivation: "Make room for **focused work**, learning and proper breaks.",
+                             nextStep: "Review **today's activity** and choose the next useful step.")
         context.insert(task)
-        context.insert(ProgressEntry(note: "Reviewed the weekly plan.", timestamp: Date().addingTimeInterval(-3600), task: task))
+        context.insert(ProgressEntry(note: "Reviewed the **weekly plan**.", timestamp: Date().addingTimeInterval(-3600), task: task))
+        task.tagRecords = [TaskTagRecord(name: "Design", colorName: "mint")]
+        seedDeskTasks(in: context)
         try? context.save()
         let now = Date()
         for (name, color, symbol) in [("Work", "mint", "briefcase"), ("Study", "blue", "book"),
@@ -38,5 +50,33 @@ enum ActivityPreview {
             store.start(work.id, at: start.addingTimeInterval(available * 330 / 420))
         }
     }
+
+    private static func seedDeskTasks(in context: ModelContext) {
+        let examples = [
+            ("Type scale", "Design", "mint", "Check small labels in **dark mode**.", "Keep dense screens **legible**.",
+             ["Reviewed **secondary labels**.", "Compared **2 weights**.", "Checked captions.", "Set body size."]),
+            ("Export notes", "Build", "purple", "Test a journal export.", "Keep a portable copy of task history.",
+             ["Checked the title field.", "Outlined the export format.", "Verified entry order."]),
+            ("Shortcuts", "Build", "purple", "Try the shortcut with one hand.", "Make frequent actions easier to reach.",
+             ["Listed common actions.", "Drafted bindings."]),
+            ("Field notes", "Research", "brown", "Group the last three observations.", "Find friction in daily work.",
+             ["Collected observations.", "Tagged the first notes.", "Read the second session."]),
+            ("Interviews", "Research", "brown", "Pull out one recurring theme.", "Understand how a working day starts.",
+             ["Read the transcript.", "Prepared prompts."]),
+            ("Улучшение Focus Desk", "Build", "purple",
+             "1. Проверить раскрытие **Next step** на карте.\n2. Сверить отступы в узком окне.\n3. Проверить читаемость в тёмной теме.",
+             "Видеть ближайшие действия прямо на карте задач.", [])
+        ]
+        for (index, example) in examples.enumerated() {
+            let (title, tag, color, step, why, notes) = example
+            let task = FocusTask(id: sampleID(index + 1), title: title, sortOrder: index + 1, motivation: why, nextStep: step)
+            task.tagRecords = [TaskTagRecord(name: tag, colorName: color)]
+            context.insert(task)
+            for (offset, note) in notes.enumerated() {
+                context.insert(ProgressEntry(note: note, timestamp: Date().addingTimeInterval(-3600 * Double(offset + 1)), task: task))
+            }
+        }
+    }
+
 }
 #endif
