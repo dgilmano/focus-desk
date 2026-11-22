@@ -42,6 +42,8 @@ In the personal or development app, right-click a task in **Task map** and choos
 
 You can also choose a parent in **New Task**, or select **Subtask** in **Voice note** before dictating. In **Update task**, the picker groups tasks by project and indents their children.
 
+Right-click a project, task or subtask and choose **Delete…**. Deleting a project removes its open and completed tasks, subtasks and journals together. Deleting a single task keeps its subtasks in the project. **Undo** restores the deletion in one action.
+
 ## Activity
 
 Activity records local start/end timestamps independently of tasks and journal entries. Selecting the active category again pauses its timer while leaving the working session open. Switching categories closes the previous interval and starts the next in one save. Category archival preserves historical intervals.

@@ -144,9 +144,11 @@ struct DeskTaskMapLayout {
 struct DeskTaskMap: View {
     var tasks: [FocusTask]
     var projects: [String]
-    var selectedID: UUID
+    var selectedID: UUID?
     var width: CGFloat
     var onTasksChanged: () -> Void
+    var onDeleteTask: (UUID, String) -> Void
+    var onDeleteProject: (String) -> Void
     var onSelect: (UUID) -> Void
 
     @AppStorage("openDeskShowsList") private var showsList = false
@@ -292,6 +294,8 @@ struct DeskTaskMap: View {
                             Button(expandedTasks.contains(item.id) ? "Collapse branch" : "Expand branch") { toggleBranch(item.id) }
                         }
                         Button("Rename…") { beginRename(.task(item.id), title: item.title) }
+                        Divider()
+                        Button("Delete…", systemImage: "trash", role: .destructive) { onDeleteTask(item.id, item.title) }
                     }
                     .zIndex(drag?.target == .task(item.id) ? 3 : 2)
                     .position(x: showsList ? 8 + min(4, CGFloat(rows[index].depth)) * 12 + node.titleWidth / 2 : node.center.x,
@@ -343,11 +347,11 @@ struct DeskTaskMap: View {
         }
         .onAppear { mapFocused = true }
         .onChange(of: selectedID) { _, id in
-            if !showsList { expandedTasks.formUnion(outline.ancestors(of: id)) }
+            if !showsList, let id { expandedTasks.formUnion(outline.ancestors(of: id)) }
             if clicks.ownerTask != id && selectedGroupID == nil { clicks = DeskMapClicks() }
         }
         .onChange(of: showsList) {
-            if !showsList { expandedTasks.formUnion(outline.ancestors(of: selectedID)) }
+            if !showsList, let selectedID { expandedTasks.formUnion(outline.ancestors(of: selectedID)) }
         }
         .sheet(item: $addingUnder, onDismiss: { mapFocused = true }) { parent in
             DeskMapSubtaskEditor { name in
@@ -482,8 +486,12 @@ struct DeskTaskMap: View {
         }
     }
 
-    private func projectMenu(_ group: DeskTaskMapLayout.Group) -> some View {
+    @ViewBuilder private func projectMenu(_ group: DeskTaskMapLayout.Group) -> some View {
         Button("Rename…") { beginRename(.project(group.tag), title: group.name) }
+        if let name = group.tag {
+            Divider()
+            Button("Delete…", systemImage: "trash", role: .destructive) { onDeleteProject(name) }
+        }
     }
 
     private func projectClick(_ group: DeskTaskMapLayout.Group, in displayed: [FocusTask], time: TimeInterval) {

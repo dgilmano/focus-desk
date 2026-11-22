@@ -7,6 +7,90 @@ import XCTest
 final class DataProtectionTests: XCTestCase {
     private enum SaveFailure: Error { case diskFull }
 
+    func testDeleteProjectAndUndoRestoresWholeHierarchyAndJournalsInOneOperation() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        var copies = 0
+        let store = TaskStore(context: context, beforeDeletion: { copies += 1 })
+        let root = populatedTask() // Completed and grouped by its legacy Work tag.
+        let child = populatedTask()
+        child.projectName = "WORK"
+        child.parentTaskID = root.id
+        child.completedAt = nil
+        let nested = FocusTask(title: "Nested", sortOrder: 2)
+        nested.projectName = "Work"
+        nested.parentTaskID = child.id
+        let other = populatedTask()
+        other.projectName = "Other" // Its Work tag does not make it a member.
+        other.parentTaskID = root.id
+        for task in [root, child, nested, other] { context.insert(task) }
+        for name in ["Work", "Other"] { context.insert(DeskProject(name: name)) }
+        let category = ActivityCategory(name: "Coding", colorName: "blue", symbol: "keyboard", sortOrder: 0)
+        context.insert(category)
+        context.insert(ActivityInterval(categoryID: category.id, start: .distantPast, end: .now, taskID: root.id, taskTitle: root.title))
+        try context.save()
+        let original = try WorkspaceBackup.capture(from: context).validated()
+        let otherID = other.id
+        let ids: Set<UUID> = [root.id, child.id, nested.id]
+        XCTAssertTrue(store.deleteProject(named: " work ", confirmedTaskIDs: ids))
+        let after = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(copies, 1)
+        XCTAssertEqual(after.projects, ["Other"])
+        XCTAssertEqual(after.tasks.map(\.id), [otherID])
+        XCTAssertNil(after.tasks.first?.parentTaskID)
+        XCTAssertEqual(after.entries, original.entries.filter { $0.taskID == otherID })
+        XCTAssertEqual(after.intervals, original.intervals)
+        XCTAssertEqual(store.deletionMessage, "Project deleted")
+        XCTAssertTrue(store.undoDeletion())
+        XCTAssertNil(store.deletionMessage)
+        let restored = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(restored.projects, original.projects)
+        XCTAssertEqual(restored.tasks.sorted { $0.id < $1.id }, original.tasks.sorted { $0.id < $1.id })
+        XCTAssertEqual(restored.entries.sorted { $0.id < $1.id }, original.entries.sorted { $0.id < $1.id })
+        XCTAssertEqual(restored.intervals, original.intervals)
+    }
+
+    func testProjectDeletionRejectsStaleConfirmationAndRollsBackOnBackupOrSaveFailure() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let task = populatedTask()
+        let id = task.id
+        context.insert(task)
+        try context.save()
+        var failBackup = true, failSave = false
+        let store = TaskStore(context: context, persist: {
+            if failSave { throw SaveFailure.diskFull }
+            try $0.save()
+        }, beforeDeletion: { if failBackup { throw SaveFailure.diskFull } })
+        XCTAssertFalse(store.deleteProject(named: "Work", confirmedTaskIDs: [id]))
+        failBackup = false
+        XCTAssertFalse(store.deleteProject(named: "Work", confirmedTaskIDs: []))
+        failSave = true
+        XCTAssertFalse(store.deleteProject(named: "Work", confirmedTaskIDs: [id]))
+        let original = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(original.tasks.map(\.id), [id])
+        XCTAssertEqual(original.entries.map(\.taskID), [id])
+        XCTAssertNil(store.deletionMessage)
+        failSave = false
+        XCTAssertTrue(store.deleteProject(named: "Work", confirmedTaskIDs: [id]))
+        failSave = true
+        XCTAssertFalse(store.undoDeletion())
+        XCTAssertEqual(store.deletionMessage, "Project deleted")
+        XCTAssertEqual(try ModelContext(container).fetchCount(FetchDescriptor<FocusTask>()), 0)
+        failSave = false
+        XCTAssertTrue(store.undoDeletion())
+        let restored = try WorkspaceBackup.capture(from: context).validated()
+        XCTAssertEqual(restored.projects, []) // Legacy tag cloud stays tag-derived.
+        XCTAssertEqual(restored.tasks, original.tasks)
+        XCTAssertEqual(restored.entries, original.entries)
+        context.insert(DeskProject(name: "Empty"))
+        try context.save()
+        XCTAssertTrue(store.deleteProject(named: "Empty", confirmedTaskIDs: []))
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<DeskProject>()), 0)
+        XCTAssertTrue(store.undoDeletion())
+        XCTAssertEqual(try context.fetch(FetchDescriptor<DeskProject>()).map(\.name), ["Empty"])
+    }
+
     #if DEBUG
     func testCreateSubtaskFromMapAndFormKeepsProjectAndBackupLinks() throws {
         let container = try PersistenceController.makeModelContainer(inMemory: true)

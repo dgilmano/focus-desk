@@ -17,6 +17,14 @@ final class TaskStore {
     private enum DeletedRecord {
         case task(WorkspaceBackup.TaskRecord, [WorkspaceBackup.JournalRecord], children: [UUID])
         case entry(WorkspaceBackup.JournalRecord)
+        case project(DeletedProject)
+    }
+
+    private struct DeletedProject {
+        let storedName: String?
+        let tasks: [WorkspaceBackup.TaskRecord]
+        let entries: [WorkspaceBackup.JournalRecord]
+        let detachedParents: [UUID: UUID]
     }
 
     init(context: ModelContext, persist: @escaping (ModelContext) throws -> Void = { try $0.save() },
@@ -159,6 +167,7 @@ final class TaskStore {
     }
 
     func delete(_ task: FocusTask) -> Bool {
+        guard task.modelContext === context, !task.isDeleted else { return false }
         let id = task.id
         let record = WorkspaceBackup.TaskRecord(task)
         let entries = task.entries.map(WorkspaceBackup.JournalRecord.init)
@@ -170,6 +179,35 @@ final class TaskStore {
             context.delete(task)
         }) else { return false }
         remember(.task(record, entries, children: children.map(\.id)))
+        return true
+    }
+
+    func deleteProject(named name: String, confirmedTaskIDs: Set<UUID>) -> Bool {
+        let key = DeskProject.key(for: name)
+        var detached: [(child: FocusTask, parent: UUID)] = []
+        var deleted: DeletedProject?
+        guard perform(rollback: { for (child, parent) in detached { child.parentTaskID = parent } }, {
+            let project = try context.fetch(FetchDescriptor<DeskProject>(predicate: #Predicate { $0.key == key })).first
+            let all = try context.fetch(FetchDescriptor<FocusTask>())
+            let members = all.filter { $0.deskProjectKey == key }
+            let ids = Set(members.map(\.id))
+            guard !key.isEmpty, ids == confirmedTaskIDs, project != nil || !members.isEmpty else {
+                throw DeskMapError(message: "The project has changed. Open its menu again to review the deletion.")
+            }
+            try beforeDeletion()
+            // Older workspaces can link a task in another project to a parent being removed.
+            detached = all.compactMap { task in
+                guard !ids.contains(task.id), let parent = task.parentTaskID, ids.contains(parent) else { return nil }
+                return (task, parent)
+            }
+            deleted = DeletedProject(storedName: project?.name, tasks: members.map(WorkspaceBackup.TaskRecord.init),
+                                     entries: members.flatMap { $0.entries.map(WorkspaceBackup.JournalRecord.init) },
+                                     detachedParents: Dictionary(uniqueKeysWithValues: detached.map { ($0.child.id, $0.parent) }))
+            for (child, _) in detached { child.parentTaskID = nil }
+            for task in members { context.delete(task) }
+            if let project { context.delete(project) }
+        }), let deleted else { return false }
+        remember(.project(deleted))
         return true
     }
 
@@ -190,6 +228,8 @@ final class TaskStore {
         var reattached: [FocusTask] = []
         guard perform(rollback: { for child in reattached { child.parentTaskID = nil } }, {
             switch record {
+            case .project(let project):
+                try restore(project, reattached: &reattached)
             case .task(let saved, let entries, let children):
                 let task = saved.makeModel()
                 if !children.isEmpty || task.parentTaskID != nil {
@@ -222,6 +262,39 @@ final class TaskStore {
         return true
     }
 
+    private func restore(_ project: DeletedProject, reattached: inout [FocusTask]) throws {
+        let existing = try context.fetch(FetchDescriptor<FocusTask>())
+        let restored = project.tasks.map { $0.makeModel() }
+        let ids = Set(restored.map(\.id))
+        guard existing.allSatisfy({ !ids.contains($0.id) }) else {
+            throw DeskMapError(message: "A task with the same ID already exists.")
+        }
+        if let name = project.storedName {
+            let key = DeskProject.key(for: name)
+            if try context.fetchCount(FetchDescriptor<DeskProject>(predicate: #Predicate { $0.key == key })) == 0 {
+                context.insert(DeskProject(name: name))
+            }
+        }
+        let all = existing + restored
+        let byID = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+        for task in restored {
+            if let parent = task.parentTaskID, byID[parent] == nil { task.parentTaskID = nil }
+            context.insert(task)
+        }
+        for entry in project.entries {
+            let task = entry.taskID.flatMap { byID[$0] }
+            context.insert(ProgressEntry(id: entry.id, note: entry.note, timestamp: entry.timestamp, task: task))
+        }
+        for (childID, parentID) in project.detachedParents {
+            guard let child = byID[childID], child.parentTaskID == nil else { continue }
+            let descendants = TaskHierarchy.branch(from: childID, links: all.map { ($0.id, $0.parentTaskID) })
+            if !descendants.contains(parentID) {
+                child.parentTaskID = parentID
+                reattached.append(child)
+            }
+        }
+    }
+
     func clearDeletionHistory() {
         deletions.removeAll()
         updateDeletionMessage()
@@ -236,6 +309,7 @@ final class TaskStore {
     private func updateDeletionMessage() {
         switch deletions.last {
         case .task: deletionMessage = "Task deleted"
+        case .project: deletionMessage = "Project deleted"
         case .entry: deletionMessage = "Journal entry deleted"
         case nil: deletionMessage = nil
         }

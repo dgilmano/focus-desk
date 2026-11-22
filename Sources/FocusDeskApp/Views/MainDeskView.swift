@@ -22,6 +22,29 @@ private enum MainSection: Equatable {
     case tag(String)
 }
 
+private enum DeskDeletion {
+    case task(UUID, String)
+    case project(String, Set<UUID>)
+
+    var title: String {
+        switch self {
+        case .task(_, let name): return "Delete task “\(name)”?"
+        case .project(let name, _): return "Delete project “\(name)”?"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .task:
+            return "This deletes the task and its journal. Its subtasks stay in the project. You can undo this deletion."
+        case .project(_, let ids):
+            if ids.isEmpty { return "This deletes the empty project. You can undo this deletion." }
+            let count = "\(ids.count) " + (ids.count == 1 ? "task" : "tasks")
+            return "This deletes the project and \(count), including any subtasks, completed tasks and their journal entries. You can undo the entire deletion."
+        }
+    }
+}
+
 private struct SidebarTagItem: Identifiable {
     var tag: TaskTagRecord
     var normalizedName: String
@@ -53,7 +76,7 @@ struct MainDeskView: View {
     @State private var journalSaveTask: Task<Void, Never>?
     @State private var isSidebarVisible = true
     @State private var sidebarDragStartWidth: Double?
-    @State private var taskToDelete: FocusTask?
+    @State private var pendingDeletion: DeskDeletion?
     @State private var showingGoogleCloudSettings = false
     #if DEBUG || FOCUS_DESK_PERSONAL
     @State private var readDeskNotices = Set<String>()
@@ -249,18 +272,20 @@ struct MainDeskView: View {
                 email: googleAccountEmail
             )
         }
-        .alert("Delete task?", isPresented: deletingTaskBinding) {
+        .alert(pendingDeletion?.title ?? "Delete?", isPresented: Binding(
+            get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }
+        ), presenting: pendingDeletion) { target in
             Button("Delete", role: .destructive) {
-                if let taskToDelete {
-                    delete(taskToDelete)
+                switch target {
+                case .task(let id, _):
+                    if let task = tasks.first(where: { $0.id == id }) { delete(task) }
+                case .project(let name, let ids):
+                    if taskStore.deleteProject(named: name, confirmedTaskIDs: ids) { refreshWidgetSnapshot() }
                 }
             }
-
-            Button("Cancel", role: .cancel) {
-                taskToDelete = nil
-            }
-        } message: {
-            Text("This removes the task and its journal. You can undo the deletion; a recovery copy will also be saved.")
+            Button("Cancel", role: .cancel) {}
+        } message: { target in
+            Text(target.message)
         }
     }
 
@@ -761,17 +786,21 @@ struct MainDeskView: View {
             ActivityWorkspaceView(selectedDate: $selectedActivityDate)
                 .transition(.opacity)
         case .desk:
+            #if DEBUG || FOCUS_DESK_PERSONAL
+            if currentTask != nil || !projects.isEmpty {
+                openDeskWorkspace(currentTask)
+            } else {
+                EmptyDeskView { selectedSection = .newTask }
+            }
+            #else
             if let task = currentTask {
-                #if DEBUG || FOCUS_DESK_PERSONAL
-                openDeskWorkspace(task)
-                #else
                 taskWorkspace(task)
-                #endif
             } else {
                 EmptyDeskView {
                     selectedSection = .newTask
                 }
             }
+            #endif
         case .newTask:
             newTaskWorkspace
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
@@ -994,7 +1023,7 @@ struct MainDeskView: View {
                         restore(task)
                     },
                     onDelete: { task in
-                        taskToDelete = task
+                        pendingDeletion = .task(task.id, task.title)
                     },
                     onCreate: {
                         selectedSection = .newTask
@@ -1039,7 +1068,7 @@ struct MainDeskView: View {
     }
 
     #if DEBUG || FOCUS_DESK_PERSONAL
-    private func openDeskWorkspace(_ task: FocusTask) -> some View {
+    private func openDeskWorkspace(_ task: FocusTask?) -> some View {
         GeometryReader { proxy in
             let width = max(1, FocusDeskStyle.workspaceContentWidth(for: proxy.size.width, insets: FocusDeskStyle.deskInsets))
             let mapWidth = max(1, width - 2 * FocusDeskStyle.panelPadding)
@@ -1051,18 +1080,27 @@ struct MainDeskView: View {
                             deskMetric("Completed", completedTasks.count)
                             deskMetric("Journal entries", tasks.reduce(0) { $0 + $1.entries.count })
                         }
-                        DeskTaskMap(tasks: activeTasks, projects: projects.map(\.name), selectedID: task.id, width: mapWidth, onTasksChanged: refreshWidgetSnapshot) { id in
+                        DeskTaskMap(tasks: activeTasks, projects: projects.map(\.name), selectedID: task?.id, width: mapWidth,
+                                    onTasksChanged: refreshWidgetSnapshot, onDeleteTask: { pendingDeletion = .task($0, $1) },
+                                    onDeleteProject: { name in
+                                        let key = DeskProject.key(for: name)
+                                        pendingDeletion = .project(name, Set(tasks.filter { $0.deskProjectKey == key }.map(\.id)))
+                                    }) { id in
                             noteFocused = false
                             currentTaskIDRaw = id.uuidString
                         }
                     }
                     .workspacePanel()
-                    DeskDetailColumns(width: width) {
-                        taskInspector(task, width: width, compact: true)
-                            .id("inspector-" + task.id.uuidString)
-                    } journal: {
-                        taskJournal(task, width: width, compact: true)
-                            .id("journal-" + task.id.uuidString)
+                    if let task {
+                        DeskDetailColumns(width: width) {
+                            taskInspector(task, width: width, compact: true)
+                                .id("inspector-" + task.id.uuidString)
+                        } journal: {
+                            taskJournal(task, width: width, compact: true)
+                                .id("journal-" + task.id.uuidString)
+                        }
+                    } else {
+                        EmptyDeskView { selectedSection = .newTask }
                     }
                 }
                 .frame(width: width, alignment: .topLeading)
@@ -1242,19 +1280,7 @@ struct MainDeskView: View {
             currentTaskIDRaw = replacementSelection
         }
 
-        taskToDelete = nil
         refreshWidgetSnapshot()
-    }
-
-    private var deletingTaskBinding: Binding<Bool> {
-        Binding(
-            get: { taskToDelete != nil },
-            set: { isPresented in
-                if !isPresented {
-                    taskToDelete = nil
-                }
-            }
-        )
     }
 
     private func showCompletionToast(for task: FocusTask) {
