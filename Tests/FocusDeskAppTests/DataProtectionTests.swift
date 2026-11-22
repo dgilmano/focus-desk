@@ -8,6 +8,45 @@ final class DataProtectionTests: XCTestCase {
     private enum SaveFailure: Error { case diskFull }
 
     #if DEBUG
+    func testCreateSubtaskFromMapAndFormKeepsProjectAndBackupLinks() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let store = TaskStore(context: container.mainContext)
+        let parent = FocusTask(title: "Release", sortOrder: 7)
+        parent.tagRecords = [.init(name: "Build")]
+        XCTAssertTrue(store.create(parent))
+        let child = try store.createSubtask(named: "  Package  ", under: parent.id)
+        XCTAssertEqual(child.title, "Package")
+        XCTAssertEqual(child.sortOrder, 8)
+        let nested = FocusTask(title: "Verify", details: "Keep details", sortOrder: 9)
+        XCTAssertTrue(store.create(nested, under: child.id))
+        let backup = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(backup.projects, ["Build"])
+        XCTAssertEqual(backup.tasks.first { $0.id == nested.id }?.parentTaskID, child.id)
+        XCTAssertEqual(backup.tasks.first { $0.id == child.id }?.parentTaskID, parent.id)
+        XCTAssertEqual(nested.projectName, "Build")
+        XCTAssertNil(parent.projectName)
+        XCTAssertThrowsError(try store.createSubtask(named: " ", under: parent.id))
+        XCTAssertTrue(store.setCompleted(parent, true))
+        XCTAssertThrowsError(try store.createSubtask(named: "Stale", under: parent.id))
+    }
+
+    func testFailedSubtaskCreationRollsBackProjectAndChildAndCanRetry() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let parent = FocusTask(title: "Run", sortOrder: 0)
+        parent.tagRecords = [.init(name: "Sport")]
+        context.insert(parent)
+        try context.save()
+        var fail = true
+        let store = TaskStore(context: context, persist: { if fail { throw SaveFailure.diskFull }; try $0.save() })
+        XCTAssertThrowsError(try store.createSubtask(named: "Shoes", under: parent.id))
+        let backup = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(backup.tasks.map(\.id), [parent.id])
+        XCTAssertEqual(backup.projects, [])
+        fail = false
+        XCTAssertEqual(try store.createSubtask(named: "Shoes", under: parent.id).parentTaskID, parent.id)
+    }
+
     func testCloudDropMovesBranchAndSupportsUntaggedWithoutChangingTags() throws {
         let container = try PersistenceController.makeModelContainer(inMemory: true)
         let context = container.mainContext
@@ -72,6 +111,27 @@ final class DataProtectionTests: XCTestCase {
         _ = try store.moveMapTask(id: child.id, from: nil, to: "Sport")
         XCTAssertNil(child.parentTaskID)
         XCTAssertEqual(child.projectName, "Sport")
+    }
+
+    func testMapStepRenameGuardsTheOriginalChecklistAndCanRetryAfterASaveFailure() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let source = "- [ ] Review\n- [ ] Review"
+        let task = FocusTask(title: "Ship", sortOrder: 0, nextStep: source)
+        context.insert(task)
+        try context.save()
+        var fail = true
+        let store = TaskStore(context: context, persist: { if fail { throw SaveFailure.diskFull }; try $0.save() })
+        let date = task.updatedAt
+        XCTAssertThrowsError(try store.renameNextStep(1, in: task.id, from: source, to: "Recheck"))
+        XCTAssertEqual(task.nextStep, source)
+        XCTAssertEqual(task.updatedAt, date)
+        fail = false
+        try store.renameNextStep(1, in: task.id, from: source, to: "Recheck")
+        XCTAssertThrowsError(try store.renameNextStep(0, in: task.id, from: source, to: "Stale"))
+        let saved = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(saved.tasks.first?.nextStep, "- [ ] Review\n- [ ] Recheck")
+        XCTAssertTrue(saved.entries.isEmpty)
     }
 
     func testMapRenameIncludesLegacyAndCompletedTasksAndDeletionUndo() throws {

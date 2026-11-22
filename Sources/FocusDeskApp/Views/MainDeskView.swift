@@ -957,6 +957,7 @@ struct MainDeskView: View {
 
             ScrollView {
                 NewTaskWorkspaceView(
+                    parentChoices: activeTasks.map(TaskOutline.Item.init),
                     availableTags: availableTagRecords,
                     onCreate: { draft in
                         createTask(draft)
@@ -1009,11 +1010,13 @@ struct MainDeskView: View {
     }
 
     private func taskInspector(_ task: FocusTask, width: CGFloat, compact: Bool = false) -> some View {
-        TaskFocusSummaryView(task: task, availableWidth: width, availableTags: availableTagRecords,
+        let outline = TaskOutline(tasks.map(TaskOutline.Item.init))
+        let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        return TaskFocusSummaryView(task: task, availableWidth: width, availableTags: availableTagRecords,
                              onTaskChanged: saveContext, onComplete: { complete(task) },
                              onCompleteNextStep: { completeStep($0, from: $1, in: task) },
                              onReturnJournalEntry: { returnEntry($0, to: task) }, compactInspector: compact,
-                             parentTask: task.parentTaskID.flatMap { id in tasks.first { $0.id == id } },
+                             ancestors: outline.ancestors(of: task.id).compactMap { byID[$0] },
                              subtasks: tasks.filter { $0.parentTaskID == task.id }, selectRelated: select)
     }
 
@@ -1048,7 +1051,7 @@ struct MainDeskView: View {
                             deskMetric("Completed", completedTasks.count)
                             deskMetric("Journal entries", tasks.reduce(0) { $0 + $1.entries.count })
                         }
-                        DeskTaskMap(tasks: activeTasks, projects: projects.map(\.name), selectedID: task.id, width: mapWidth, onTaskRenamed: refreshWidgetSnapshot) { id in
+                        DeskTaskMap(tasks: activeTasks, projects: projects.map(\.name), selectedID: task.id, width: mapWidth, onTasksChanged: refreshWidgetSnapshot) { id in
                             noteFocused = false
                             currentTaskIDRaw = id.uuidString
                         }
@@ -1120,7 +1123,8 @@ struct MainDeskView: View {
             nextStep: draft.nextStep,
             motivation: draft.motivation,
             tags: draft.tags,
-            initialJournalEntry: draft.initialJournalEntry
+            initialJournalEntry: draft.initialJournalEntry,
+            parentID: draft.parentID
         )
     }
 
@@ -1134,7 +1138,8 @@ struct MainDeskView: View {
         nextStep: String,
         motivation: String,
         tags: [TaskTagRecord],
-        initialJournalEntry: String
+        initialJournalEntry: String,
+        parentID: UUID? = nil
     ) -> Bool {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1164,7 +1169,7 @@ struct MainDeskView: View {
             task.entries.append(entry)
         }
 
-        guard taskStore.create(task) else { return false }
+        guard taskStore.create(task, under: parentID) else { return false }
         select(task.id)
         refreshWidgetSnapshot()
         return true
@@ -1490,10 +1495,12 @@ private struct ManageWorkspaceView: View {
             if visibleTasks.isEmpty {
                 emptyState
             } else {
+                let outline = TaskOutline((activeTasks + completedTasks).map(TaskOutline.Item.init))
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(visibleTasks) { task in
                         ManageTaskRow(
                             task: task,
+                            parentPath: task.parentTaskID.map { outline.path(to: $0) },
                             mode: mode,
                             onOpen: onOpen,
                             onComplete: onComplete,
@@ -1537,6 +1544,7 @@ private struct ManageWorkspaceView: View {
 
 private struct ManageTaskRow: View {
     var task: FocusTask
+    var parentPath: String?
     var mode: ManageWorkspaceMode
     var onOpen: (FocusTask) -> Void
     var onComplete: (FocusTask) -> Void
@@ -1555,6 +1563,10 @@ private struct ManageTaskRow: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+
+                if let parentPath, !parentPath.isEmpty {
+                    Label(parentPath, systemImage: "arrow.turn.down.right").font(.caption).foregroundStyle(.secondary)
+                }
 
                 if !task.details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     MarkdownText(
@@ -1976,7 +1988,8 @@ private struct SummaryWorkspaceView: View {
     }
 
     private var needsAttentionPanel: some View {
-        FocusDeskGroupedPanel {
+        let outline = TaskOutline(tasks.map(TaskOutline.Item.init))
+        return FocusDeskGroupedPanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Needs attention")
@@ -1999,7 +2012,7 @@ private struct SummaryWorkspaceView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(metrics.inactiveTasks.enumerated()), id: \.element.id) { index, task in
                             SummaryTaskAttentionRow(
-                                task: task,
+                                task: task, title: outline.path(to: task.id),
                                 now: now,
                                 onOpen: {
                                     onOpen(task)
@@ -2018,7 +2031,8 @@ private struct SummaryWorkspaceView: View {
     }
 
     private var journalPanel: some View {
-        FocusDeskGroupedPanel {
+        let outline = TaskOutline(tasks.map(TaskOutline.Item.init))
+        return FocusDeskGroupedPanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -2066,7 +2080,7 @@ private struct SummaryWorkspaceView: View {
                 } else {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(metrics.journalEntriesForSelectedDay.enumerated()), id: \.element.entry.id) { index, item in
-                            SummaryJournalEntryRow(item: item)
+                            SummaryJournalEntryRow(item: item, title: outline.path(to: item.task.id))
 
                             if index < metrics.journalEntriesForSelectedDay.count - 1 {
                                 Divider()
@@ -2364,6 +2378,7 @@ private struct SummaryTagBadge: View {
 
 private struct SummaryTaskAttentionRow: View {
     var task: FocusTask
+    var title: String
     var now: Date
     var onOpen: () -> Void
 
@@ -2372,7 +2387,7 @@ private struct SummaryTaskAttentionRow: View {
             FocusDeskIcon(systemName: "clock", filled: false)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(task.title)
+                Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
@@ -2410,11 +2425,12 @@ private struct SummaryTaskAttentionRow: View {
 
 private struct SummaryJournalEntryRow: View {
     var item: SummaryJournalEntry
+    var title: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(item.task.title)
+                Text(title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
@@ -2512,6 +2528,7 @@ private enum SummaryDateFormatting {
 }
 
 private struct NewTaskDraft {
+    var parentID: UUID?
     var title = ""
     var details = ""
     var nextStep = ""
@@ -2524,7 +2541,7 @@ private struct NewTaskDraft {
     }
 
     var hasContent: Bool {
-        [
+        parentID != nil || [
             title,
             details,
             nextStep,
@@ -2545,6 +2562,7 @@ private enum NewTaskFocusField: Hashable {
 }
 
 private struct NewTaskWorkspaceView: View {
+    var parentChoices: [TaskOutline.Item]
     var availableTags: [TaskTagRecord]
     var onCreate: (NewTaskDraft) -> Bool
     var onCancel: () -> Void
@@ -2598,9 +2616,14 @@ private struct NewTaskWorkspaceView: View {
 
     private var taskPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Task")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.primary)
+            HStack {
+                Text(draft.parentID == nil ? "Task" : "Subtask").font(.system(size: 13))
+                Spacer()
+                if !parentChoices.isEmpty {
+                    ProjectTaskPicker(tasks: parentChoices, selection: $draft.parentID, label: "Parent task", emptyChoice: "No parent")
+                        .frame(maxWidth: 210).frame(height: 24).help("Choose a parent to create a subtask")
+                }
+            }
 
             ZStack(alignment: .leading) {
                 TextField("", text: $draft.title)

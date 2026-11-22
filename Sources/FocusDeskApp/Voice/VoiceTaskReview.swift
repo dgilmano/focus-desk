@@ -27,6 +27,8 @@ struct VoiceTaskReview {
         if projectName.isEmpty { projectName = target?.project ?? "" }
         let hint = DeskProject.key(for: proposal.parentTitle)
         let eligible = Self.parentChoices(for: target, tasks: tasks)
+        let selectedParent = eligible.first { $0.id == defaultParent }
+        if projectName.isEmpty { projectName = selectedParent?.project ?? "" }
         if !hint.isEmpty {
             let projectKey = DeskProject.key(for: projectName)
             let matches = eligible.filter {
@@ -34,9 +36,10 @@ struct VoiceTaskReview {
             }
             if matches.count == 1 { parentTaskID = matches[0].id }
             else { unmatchedParent = proposal.parentTitle }
-        } else if let parent = eligible.first(where: { $0.id == defaultParent }),
-                  spokenProject.isEmpty || DeskProject.key(for: parent.project) == DeskProject.key(for: spokenProject) {
-            parentTaskID = parent.id
+        } else if let selectedParent {
+            parentTaskID = selectedParent.id
+        } else if defaultParent != nil {
+            unmatchedParent = "Previously selected task"
         } else if let target, DeskProject.key(for: target.project) == DeskProject.key(for: projectName) {
             parentTaskID = target.parentTaskID
         }

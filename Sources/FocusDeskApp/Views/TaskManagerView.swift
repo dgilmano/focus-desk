@@ -78,12 +78,12 @@ struct TaskManagerView: View {
         .background(FocusDeskStyle.appBackground)
         .safeAreaInset(edge: .bottom, spacing: 0) { DataProtectionStatus() }
         .sheet(isPresented: $showingNewTask) {
-            TaskEditorSheet(mode: .create) { title, details in
-                createTask(title: title, details: details)
+            TaskEditorSheet(mode: .create, parentChoices: activeTasks.map(TaskOutline.Item.init)) { title, details, parentID in
+                createTask(title: title, details: details, parentID: parentID)
             }
         }
         .sheet(item: $taskToEdit) { task in
-            TaskEditorSheet(mode: .edit(task)) { title, details in
+            TaskEditorSheet(mode: .edit(task)) { title, details, _ in
                 task.title = title
                 task.details = details
                 task.updatedAt = Date()
@@ -93,7 +93,7 @@ struct TaskManagerView: View {
             }
         }
         .sheet(item: $taskToViewHistory) { task in
-            TaskHistoryView(task: task)
+            TaskHistoryView(task: task, taskPath: TaskOutline(tasks.map(TaskOutline.Item.init)).path(to: task.id))
         }
         .alert("Delete task?", isPresented: deletingTaskBinding) {
             Button("Delete", role: .destructive) {
@@ -160,7 +160,7 @@ struct TaskManagerView: View {
     }
 
     private func activeRow(_ task: FocusTask) -> some View {
-        TaskManagerRow(task: task) {
+        TaskManagerRow(task: task, parentTitle: task.parentTaskID.flatMap { id in tasks.first { $0.id == id }?.title }) {
             Button("Open") {
                 currentTaskIDRaw = task.id.uuidString
                 refreshWidgetSnapshot()
@@ -177,7 +177,7 @@ struct TaskManagerView: View {
     }
 
     private func completedRow(_ task: FocusTask) -> some View {
-        TaskManagerRow(task: task) {
+        TaskManagerRow(task: task, parentTitle: task.parentTaskID.flatMap { id in tasks.first { $0.id == id }?.title }) {
             Button("View History") {
                 taskToViewHistory = task
             }
@@ -203,7 +203,7 @@ struct TaskManagerView: View {
         )
     }
 
-    private func createTask(title: String, details: String) -> Bool {
+    private func createTask(title: String, details: String, parentID: UUID?) -> Bool {
         let nextOrder = (tasks.map(\.sortOrder).max() ?? -1) + 1
         let now = Date()
         let task = FocusTask(
@@ -214,7 +214,7 @@ struct TaskManagerView: View {
             sortOrder: nextOrder
         )
 
-        guard taskStore.create(task) else { return false }
+        guard taskStore.create(task, under: parentID) else { return false }
         currentTaskIDRaw = task.id.uuidString
         refreshWidgetSnapshot()
         return true
@@ -254,6 +254,7 @@ private enum TaskManagerTab: Hashable {
 
 private struct TaskManagerRow<Actions: View>: View {
     var task: FocusTask
+    var parentTitle: String?
     @ViewBuilder var actions: () -> Actions
 
     var body: some View {
@@ -267,6 +268,10 @@ private struct TaskManagerRow<Actions: View>: View {
                 Text(task.title)
                     .font(.system(size: 17, weight: .semibold))
                     .lineLimit(1)
+
+                if let parentTitle {
+                    Label(parentTitle, systemImage: "arrow.turn.down.right").font(.caption).foregroundStyle(.secondary)
+                }
 
                 if !task.details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     MarkdownText(

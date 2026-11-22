@@ -115,6 +115,19 @@ private final class VoiceFixture: URLProtocol, @unchecked Sendable {
         _ = try await api.organize("Сверить отчёт.", current: nil, taskInstructions: " \n\t", key: "test")
     }
 
+    func testSubtaskModeUsesSelectedParentAndNeverSilentlyDropsAStaleSelection() throws {
+        let parent = FocusTask(title: "Package", sortOrder: 0)
+        parent.tagRecords = [.init(name: "Build")]
+        let chosen = VoiceTaskContext(parent)
+        let proposal = VoiceTaskProposal(title: "Verify PDF", summary: "", steps: [], suggestions: [], projectName: "Other")
+        let draft = VoiceTaskReview(proposal, tasks: [chosen], defaultParent: chosen.id)
+        XCTAssertEqual(draft.parentTaskID, parent.id)
+        XCTAssertEqual(draft.projectName, "Build")
+        let stale = VoiceTaskReview(proposal, tasks: [], defaultParent: chosen.id)
+        XCTAssertNotNil(stale.unmatchedParent)
+        XCTAssertNil(stale.parentTaskID)
+    }
+
     func testDictatedParentAndChildCanBeReviewedSavedAndRestored() async throws {
         let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = TaskStore(context: container.mainContext)

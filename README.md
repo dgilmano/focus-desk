@@ -36,6 +36,12 @@ Day tracker in Focus Desk 0.5.0, using demonstration data.
 - Balance switches between Day, Week, and Month, with category totals and recorded/untracked time for the selected calendar period. Weekly and monthly views include period navigation; current periods count only elapsed time. Week boundaries follow the system calendar, and the selected date remains shared with the daily timeline and Journal.
 - Sidebar navigation: Focus (Desk, Day tracker), Manage (New Task, Tasks, Completed, Summary), and Tags.
 
+## Subtasks on Desk
+
+In the personal or development app, right-click a task in **Task map** and choose **Add subtask…**. Subtasks and next steps start collapsed. Double-click a task to show its direct subtasks and individual next steps as connected nodes. Drag an expanded step to place it on the map. Its line follows it, and the map remembers its position relative to the task. Double-click the task again to collapse the branch. To rename a project, task or step in place, click its label twice with a short pause, or choose **Rename…** from its context menu. Press Return to save or Escape to cancel. **Current task** shows the project and the path to the selected task. Click a parent in that path to open it.
+
+You can also choose a parent in **New Task**, or select **Subtask** in **Voice note** before dictating. In **Update task**, the picker groups tasks by project and indents their children.
+
 ## Activity
 
 Activity records local start/end timestamps independently of tasks and journal entries. Selecting the active category again pauses its timer while leaving the working session open. Switching categories closes the previous interval and starts the next in one save. Category archival preserves historical intervals.

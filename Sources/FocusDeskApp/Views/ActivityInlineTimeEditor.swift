@@ -75,7 +75,10 @@ struct ActivityIntervalTaskMenu: View {
     var body: some View {
         Menu {
             Button("No task") { select(nil) }
-            ForEach(tasks) { task in Button(task.title) { select(task) } }
+            let outline = TaskOutline(tasks.map(TaskOutline.Item.init))
+            ForEach(outline.rows()) { row in
+                Button(outline.path(to: row.id)) { select(tasks.first { $0.id == row.id }) }
+            }
         } label: {
             Text(title).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
         }

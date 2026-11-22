@@ -20,6 +20,10 @@ struct VoiceTaskContext: Identifiable, Encodable, Equatable, Sendable {
         isCompleted = task.completedAt != nil
     }
 
+    var outlineItem: TaskOutline.Item {
+        .init(id: id, parentID: parentTaskID, title: title, project: project)
+    }
+
     // The local identifier is only used to apply the reviewed change.
     enum CodingKeys: String, CodingKey { case title, details, nextStep }
 }

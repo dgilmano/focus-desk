@@ -4,6 +4,7 @@ import Foundation
 struct DeskMapDrag: Equatable {
     enum Target: Equatable {
         case task(UUID)
+        case step(DeskMapSteps.PlacementKey)
         case group(String)
         case label(String)
     }
@@ -13,23 +14,37 @@ struct DeskMapDrag: Equatable {
     var location: CGPoint?
 }
 
-/// Store only manual placements, as fractions of the canvas rather than pixels.
+/// Store only manual placements. Steps stay at a point offset from their owning task.
 struct DeskMapArrangement: Codable, Equatable {
     var tasks: [UUID: CGPoint] = [:]
+    var stepOffsets: [DeskMapSteps.PlacementKey: CGSize] = [:]
     var groups: [String: CGPoint] = [:]
     // Relative to the hub in units of the cloud radius, independent of the cloud's placement.
     var labels: [String: CGPoint] = [:]
     var groupOrder: [String] = []
-    var isEmpty: Bool { tasks.isEmpty && groups.isEmpty && labels.isEmpty && groupOrder.isEmpty }
+    var isEmpty: Bool { tasks.isEmpty && stepOffsets.isEmpty && groups.isEmpty && labels.isEmpty && groupOrder.isEmpty }
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         tasks = try values.decode([UUID: CGPoint].self, forKey: .tasks)
+        stepOffsets = try values.decodeIfPresent([DeskMapSteps.PlacementKey: CGSize].self, forKey: .stepOffsets) ?? [:]
         groups = try values.decode([String: CGPoint].self, forKey: .groups)
         labels = try values.decodeIfPresent([String: CGPoint].self, forKey: .labels) ?? [:]
         groupOrder = try values.decodeIfPresent([String].self, forKey: .groupOrder) ?? []
+    }
+
+    mutating func renameStep(at index: Int, in task: UUID, labels: [String], to name: String) {
+        guard labels.indices.contains(index), stepOffsets.keys.contains(where: { $0.task == task }) else { return }
+        var renamed = labels
+        renamed[index] = name
+        let oldKeys = DeskMapSteps.PlacementKey.keys(task: task, labels: labels)
+        let newKeys = DeskMapSteps.PlacementKey.keys(task: task, labels: renamed)
+        let previous = stepOffsets
+        // A rename to or from a duplicate label can also change its siblings' occurrence numbers.
+        for key in oldKeys { stepOffsets.removeValue(forKey: key) }
+        for (old, new) in zip(oldKeys, newKeys) { stepOffsets[new] = previous[old] }
     }
 
     mutating func renameGroup(from oldID: String, to newID: String) {
@@ -47,6 +62,7 @@ struct DeskMapArrangement: Codable, Equatable {
             CGPoint(x: point.x / width, y: point.y / layout.mapHeight)
         }
         switch target {
+        case .step: break
         case .task(let id):
             guard let index = items.firstIndex(where: { $0.id == id }) else { return }
             tasks[id] = normalized(layout.nodes[index].center)
@@ -97,6 +113,7 @@ extension DeskTaskMapLayout {
         let area = CGRect(x: 0, y: 0, width: width, height: mapHeight)
         var result = self
         switch drag.target {
+        case .step: return self
         case .label(let id):
             guard let g = groups.firstIndex(where: { $0.id == id }) else { return self }
             let group = groups[g]
@@ -152,7 +169,7 @@ private extension DeskTaskMapLayout.Group {
     }
 }
 
-private extension DeskTaskMapLayout.Node {
+extension DeskTaskMapLayout.Node {
     var chipBounds: CGRect {
         CGRect(x: center.x - chipWidth / 2, y: center.y - 11, width: chipWidth, height: 22)
     }

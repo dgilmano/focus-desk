@@ -18,7 +18,7 @@ struct TaskFocusSummaryView: View {
     var onCompleteNextStep: (NextStepChecklist.Item.ID, String) -> Bool
     var onReturnJournalEntry: (UUID) -> Bool
     var compactInspector = false
-    var parentTask: FocusTask?
+    var ancestors: [FocusTask] = []
     var subtasks: [FocusTask] = []
     var selectRelated: (UUID) -> Void = { _ in }
     @State private var inspectorTab = DeskInspectorTab.next
@@ -72,17 +72,11 @@ struct TaskFocusSummaryView: View {
                 inspectorFields
             } else {
                 taskTitleBlock
-                if let name = task.projectName, !name.isEmpty {
-                    Label(name, systemImage: "folder").font(.caption).foregroundStyle(.secondary)
-                }
-                if let parentTask {
-                    relatedTask(parentTask, symbol: "arrow.turn.left.up", prefix: "Parent")
-                }
                 if !subtasks.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Subtasks").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         ForEach(subtasks) { child in
-                            relatedTask(child, symbol: child.completedAt == nil ? "circle" : "checkmark.circle.fill", prefix: nil)
+                            relatedTask(child, symbol: child.completedAt == nil ? "circle" : "checkmark.circle.fill")
                         }
                     }
                 }
@@ -94,9 +88,9 @@ struct TaskFocusSummaryView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    private func relatedTask(_ related: FocusTask, symbol: String, prefix: String?) -> some View {
+    private func relatedTask(_ related: FocusTask, symbol: String) -> some View {
         Button { selectRelated(related.id) } label: {
-            Label(prefix.map { "\($0) · \(related.title)" } ?? related.title, systemImage: symbol)
+            Label(related.title, systemImage: symbol)
                 .lineLimit(2)
         }
         .buttonStyle(.plain).font(.callout)
@@ -203,9 +197,33 @@ struct TaskFocusSummaryView: View {
         .contentShape(Rectangle())
     }
 
+    private var taskHeading: AttributedString {
+        let project = task.deskProjectTag?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var path = AttributedString()
+        if !project.isEmpty || !ancestors.isEmpty {
+            path = AttributedString((project.isEmpty ? "Untagged" : project) + " › ")
+        }
+        for ancestor in ancestors {
+            var part = AttributedString(ancestor.title)
+            if ancestor.completedAt == nil { part.link = URL(string: "focusdesk-task://" + ancestor.id.uuidString) }
+            path += part + AttributedString(" › ")
+        }
+        path.font = .system(size: compactInspector ? 12 : 15)
+        path.foregroundColor = .secondary
+        path += AttributedString(task.title)
+        return path
+    }
+
     private var taskTitleBlock: some View {
         VStack(alignment: .leading, spacing: compactInspector ? 5 : 14) {
-            Text(task.title)
+            Text(taskHeading)
+                .environment(\.openURL, OpenURLAction { url in
+                    guard url.scheme == "focusdesk-task", let value = url.host, let id = UUID(uuidString: value),
+                          ancestors.contains(where: { $0.id == id && $0.completedAt == nil }) else { return .discarded }
+                    selectRelated(id)
+                    return .handled
+                })
+                .accessibilityLabel(String(taskHeading.characters))
                 .font(.system(size: compactInspector ? 14 : 28, weight: .semibold))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)

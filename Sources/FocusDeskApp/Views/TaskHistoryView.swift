@@ -4,12 +4,13 @@ struct TaskHistoryView: View {
     @Environment(\.dismiss) private var dismiss
 
     var task: FocusTask
+    let taskPath: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(task.title)
+                    Text(taskPath)
                         .font(.system(size: 22, weight: .semibold))
                         .lineLimit(2)
 

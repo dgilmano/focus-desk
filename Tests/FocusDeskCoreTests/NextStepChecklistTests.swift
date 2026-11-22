@@ -10,6 +10,23 @@ final class NextStepChecklistTests: XCTestCase {
         XCTAssertEqual(NextStepChecklist("[x](https://example.com)").items.first?.text, "[x](https://example.com)")
     }
 
+    func testRenameOnlyReplacesTheChosenLabelAndKeepsCheckboxAndLineEndings() {
+        let source = "1. Повтор\r\n\r\n  - [X]  Повтор  \r\n**Отправить**"
+        let list = NextStepChecklist(source)
+        XCTAssertEqual(list.renaming(1, to: "  Сверить **логи**  "), "1. Повтор\r\n\r\n  - [X]  Сверить **логи**  \r\n**Отправить**")
+        XCTAssertNil(list.renaming(3, to: "Oops"))
+        XCTAssertNil(list.renaming(0, to: "   "))
+        XCTAssertNil(list.renaming(0, to: "Two\nlines"))
+        for literal in ["1. Number", "[x] Literal", "- Another list"] {
+            for original in ["Draft", "1. Draft", "- [X] Draft"] {
+                let rewritten = NextStepChecklist(original).renaming(0, to: literal)
+                let step = NextStepChecklist(rewritten ?? "").items.first
+                XCTAssertEqual(step?.text, literal)
+                XCTAssertEqual(step?.isCompleted, original.contains("[X]"))
+            }
+        }
+    }
+
     func testRemovingStepKeepsOtherLinesAndTheirFormatting() {
         let original = "  1. [X] **Готово**  \r\n\r\n  • Шаг 👋🏽\r\n  • Шаг 👋🏽\n"
         let list = NextStepChecklist(original)

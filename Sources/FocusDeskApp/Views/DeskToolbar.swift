@@ -69,14 +69,15 @@ struct DeskToolbar: View {
                     Button("Previous task", action: previousTask)
                     Button("Next task", action: nextTask)
                     Divider()
-                    ForEach(tasks) { task in
+                    let outline = TaskOutline(tasks.map(TaskOutline.Item.init))
+                    ForEach(outline.rows()) { row in
                         Button {
-                            selectTask(task.id)
+                            selectTask(row.id)
                         } label: {
-                            if task.id == currentTaskID {
-                                Label(task.title, systemImage: "checkmark")
+                            if row.id == currentTaskID {
+                                Label(outline.path(to: row.id), systemImage: "checkmark")
                             } else {
-                                Text(task.title)
+                                Text(outline.path(to: row.id))
                             }
                         }
                     }

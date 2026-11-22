@@ -21,7 +21,10 @@ struct VoiceTaskWidget: View {
     @Query(sort: \DeskProject.key) private var projects: [DeskProject]
     @AppStorage(VoiceTaskPreferences.instructionsKey) private var taskInstructions = ""
     @State private var capture = VoiceCapture()
-    @State private var updateCurrent = false
+    private enum Mode: String { case newTask = "New task", subtask = "Subtask", update = "Update task" }
+    @State private var mode = Mode.newTask
+    @State private var parentID: UUID?
+    private var updateCurrent: Bool { mode == .update }
     @State private var editID: UUID?
     @State private var reviewingTarget: VoiceTaskContext?
     @State private var showingNewProject = false
@@ -60,7 +63,8 @@ struct VoiceTaskWidget: View {
     private var heading: String {
         if showingConnection { return "OpenAI connection" }
         guard let review else { return "Voice note" }
-        return review.kind == .project ? "Review project" : "Review task"
+        if review.kind == .project { return "Review project" }
+        return review.parentTaskID == nil ? "Review task" : "Review subtask"
     }
 
     private var limits: CGRect {
@@ -72,7 +76,7 @@ struct VoiceTaskWidget: View {
     private var initialHeight: CGFloat {
         if showingConnection { return 260 }
         if review != nil { return 470 }
-        return updateCurrent ? 304 : 272
+        return mode == .newTask ? 272 : 338
     }
 
     private var cardFrame: CGRect {
@@ -107,6 +111,7 @@ struct VoiceTaskWidget: View {
         }
         .onAppear {
             editID = current?.id ?? choices.first(where: { !$0.isCompleted })?.id
+            parentID = editID
             do {
                 let saved = try VoiceAPIKey.read()
                 keySaved = !saved.isEmpty
@@ -204,14 +209,32 @@ struct VoiceTaskWidget: View {
         VStack(alignment: .leading, spacing: 12) {
             let openTasks = choices.filter { !$0.isCompleted }
             HStack(spacing: 2) {
-                modeButton("New task", update: false)
-                modeButton("Update task", update: true).disabled(openTasks.isEmpty)
+                modeButton(.newTask)
+                modeButton(.subtask).disabled(openTasks.isEmpty)
+                modeButton(.update).disabled(openTasks.isEmpty)
             }
             .padding(3)
             .background(FocusDeskStyle.focusSurface, in: RoundedRectangle(cornerRadius: 8))
-            if updateCurrent {
-                VoiceProjectTaskPicker(tasks: openTasks, selection: $editID)
+            if mode != .newTask {
+                let outline = TaskOutline(choices.map(\.outlineItem))
+                if mode == .subtask { Text("Parent task").font(.caption).foregroundStyle(.secondary) }
+                ProjectTaskPicker(tasks: openTasks.map(\.outlineItem), selection: updateCurrent ? $editID : $parentID,
+                                  label: updateCurrent ? "Task to update" : "Parent task")
                     .frame(maxWidth: .infinity).frame(height: 24)
+                if let id = updateCurrent ? editID : parentID, let item = outline.items[id] {
+                    Text("\(item.project.isEmpty ? "Untagged" : item.project) › \(outline.path(to: id))")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if updateCurrent, let children = outline.children[id] {
+                        Menu("Subtasks (\(children.count))") {
+                            ForEach(children, id: \.self) { childID in
+                                if let child = choices.first(where: { $0.id == childID }) {
+                                    Button(child.title) { editID = child.id }.disabled(child.isCompleted)
+                                }
+                            }
+                        }
+                        .fixedSize().font(.caption)
+                    }
+                }
             }
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
@@ -230,10 +253,10 @@ struct VoiceTaskWidget: View {
         }
     }
 
-    private func modeButton(_ title: String, update: Bool) -> some View {
-        let selected = updateCurrent == update
-        return Button { updateCurrent = update } label: {
-            Text(title).font(.system(size: 12, weight: selected ? .semibold : .regular))
+    private func modeButton(_ option: Mode) -> some View {
+        let selected = mode == option
+        return Button { mode = option } label: {
+            Text(option.rawValue).font(.system(size: 12, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Color.primary : .secondary)
                 .frame(maxWidth: .infinity).frame(height: 25)
                 .background { if selected { RoundedRectangle(cornerRadius: 6).fill(FocusDeskStyle.groupedBackground) } }
@@ -260,7 +283,7 @@ struct VoiceTaskWidget: View {
                 reviewFields(draft)
             }
             if updateCurrent && errorText != nil {
-                Button("Use draft for a new task") { updateCurrent = false; reviewingTarget = nil; errorText = nil }
+                Button("Use draft for a new task") { mode = .newTask; reviewingTarget = nil; errorText = nil }
             }
         }
     }
@@ -276,7 +299,7 @@ struct VoiceTaskWidget: View {
                 }
                 if !remaining.isEmpty { Button("Skip") { advance() } }
                 Spacer(minLength: 0)
-                primaryButton(review.kind == .project ? "Save project" : (updateCurrent ? "Apply changes" : "Create task")) {
+                primaryButton(review.kind == .project ? "Save project" : (updateCurrent ? "Apply changes" : (review.parentTaskID == nil ? "Create task" : "Create subtask"))) {
                     do {
                         if let saved = try save(review, reviewingTarget) { savedInBatch.append(saved) }
                         advance()
@@ -288,7 +311,7 @@ struct VoiceTaskWidget: View {
                 Spacer()
                 if hasKey {
                     primaryButton("Create draft", action: organize)
-                        .disabled(busy != nil || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || capture.file != nil || (updateCurrent && target == nil))
+                        .disabled(busy != nil || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || capture.file != nil || (updateCurrent && target == nil) || (mode == .subtask && !choices.contains { $0.id == parentID && !$0.isCompleted }))
                         .help(updateCurrent ? "Send your note, task instructions and the selected task’s title, description and next steps to OpenAI." : "Send your note and task instructions to OpenAI.")
                 } else {
                     primaryButton("Connect OpenAI") { showingConnection = true }.disabled(busy != nil)
@@ -318,25 +341,18 @@ struct VoiceTaskWidget: View {
         }
     }
 
-    private func taskLabel(_ task: VoiceTaskContext) -> String {
-        task.project.isEmpty ? task.title : "\(task.title) · \(task.project)"
-    }
-
     private func parentMenu(selected: UUID?, target: VoiceTaskContext?, hint: String?,
                             choose: @escaping (VoiceTaskContext?) -> Void) -> some View {
         let parents = VoiceTaskReview.parentChoices(for: target, tasks: choices)
-        let title = choices.first { $0.id == selected }?.title
+        let binding = Binding<UUID?>(get: { selected }, set: { id in choose(parents.first { $0.id == id }) })
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text("Parent task").accessibilityHidden(true)
-                Menu(title ?? (hint == nil && selected == nil ? "No parent" : "Choose parent")) {
-                    Button("No parent") { choose(nil) }
-                    if !parents.isEmpty { Divider() }
-                    ForEach(parents) { task in
-                        Button(taskLabel(task)) { choose(task) }
-                    }
-                }
-                .accessibilityLabel("Parent task").accessibilityValue(title ?? hint ?? "No parent")
+                ProjectTaskPicker(tasks: parents.map(\.outlineItem), selection: binding, label: "Parent task", emptyChoice: "No parent")
+                    .frame(height: 24)
+            }
+            if let selected {
+                Text(TaskOutline(choices.map(\.outlineItem)).path(to: selected)).font(.caption).foregroundStyle(.secondary)
             }
             if let hint {
                 Text("Parent in your note: \(hint). Choose a matching task or No parent.")
@@ -461,7 +477,7 @@ struct VoiceTaskWidget: View {
     }
 
     private func makeReview(_ proposal: VoiceTaskProposal) -> VoiceTaskReview {
-        VoiceTaskReview(proposal, target: reviewingTarget, tasks: choices)
+        VoiceTaskReview(proposal, target: reviewingTarget, tasks: choices, defaultParent: mode == .subtask ? parentID : nil)
     }
 
     private func run(_ label: String, work: @escaping @MainActor () async throws -> Void) {

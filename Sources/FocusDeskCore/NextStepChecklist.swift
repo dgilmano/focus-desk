@@ -6,6 +6,7 @@ public struct NextStepChecklist {
         public let id: Int
         public let text: String
         public let isCompleted: Bool
+        fileprivate let textRange: Range<String.Index>
         fileprivate let lineRange: Range<String.Index>
     }
 
@@ -21,12 +22,27 @@ public struct NextStepChecklist {
             guard let match = line.prefixMatch(of: prefix) else { continue }
             let start = match.range.upperBound
             let text = line[start...].trimmingCharacters(in: .whitespaces)
-            guard !text.isEmpty else { continue }
+            guard !text.isEmpty, let textRange = line[start...].range(of: text, options: .literal) else { continue }
             let isCompleted = match.output.1?.lowercased() == "x"
             items.append(Item(id: items.count, text: text, isCompleted: isCompleted,
-                              lineRange: line.startIndex..<line.endIndex))
+                              textRange: textRange, lineRange: line.startIndex..<line.endIndex))
         }
         self.items = items
+    }
+
+    /// Change only the label, preserving the list marker, checkbox, spacing and line endings.
+    public func renaming(_ id: Item.ID, to input: String) -> String? {
+        let title = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard items.indices.contains(id), !title.isEmpty, !title.contains(where: \.isNewline) else { return nil }
+        let item = items[id]
+        var label = title
+        let line = source[item.lineRange].replacingCharacters(in: item.textRange, with: title)
+        let parsed = NextStepChecklist(line).items.first
+        if parsed?.text != title || parsed?.isCompleted != item.isCompleted {
+            // An explicit checkbox keeps a literal leading “1.” or “[x]” part of the new label.
+            label = "[ ] " + title
+        }
+        return source.replacingCharacters(in: item.textRange, with: label)
     }
 
     public func removing(_ id: Item.ID) -> String {

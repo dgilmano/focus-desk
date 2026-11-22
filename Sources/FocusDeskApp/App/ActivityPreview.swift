@@ -23,7 +23,7 @@ enum ActivityPreview {
         context.insert(task)
         context.insert(ProgressEntry(note: "Reviewed the **weekly plan**.", timestamp: Date().addingTimeInterval(-3600), task: task))
         task.tagRecords = [TaskTagRecord(name: "Design", colorName: "mint")]
-        seedDeskTasks(in: context)
+        seedDeskTasks(in: context, designParent: task.id)
         try? context.save()
         let now = Date()
         for (name, color, symbol) in [("Work", "mint", "briefcase"), ("Study", "blue", "book"),
@@ -51,7 +51,7 @@ enum ActivityPreview {
         }
     }
 
-    private static func seedDeskTasks(in context: ModelContext) {
+    private static func seedDeskTasks(in context: ModelContext, designParent: UUID) {
         let examples = [
             ("Type scale", "Design", "mint", "Check small labels in **dark mode**.", "Keep dense screens **legible**.",
              ["Reviewed **secondary labels**.", "Compared **2 weights**.", "Checked captions.", "Set body size."]),
@@ -70,6 +70,7 @@ enum ActivityPreview {
         for (index, example) in examples.enumerated() {
             let (title, tag, color, step, why, notes) = example
             let task = FocusTask(id: sampleID(index + 1), title: title, sortOrder: index + 1, motivation: why, nextStep: step)
+            if tag == "Design" { task.parentTaskID = designParent }
             task.tagRecords = [TaskTagRecord(name: tag, colorName: color)]
             context.insert(task)
             for (offset, note) in notes.enumerated() {

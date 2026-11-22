@@ -20,10 +20,13 @@ struct TaskEditorSheet: View {
     @State private var title: String
     @State private var details: String
 
+    @State private var parentID: UUID?
+    let parentChoices: [TaskOutline.Item]
     var mode: Mode
-    var onSave: (String, String) -> Bool
+    var onSave: (String, String, UUID?) -> Bool
 
-    init(mode: Mode, onSave: @escaping (String, String) -> Bool) {
+    init(mode: Mode, parentChoices: [TaskOutline.Item] = [], onSave: @escaping (String, String, UUID?) -> Bool) {
+        self.parentChoices = parentChoices
         self.mode = mode
         self.onSave = onSave
 
@@ -48,6 +51,11 @@ struct TaskEditorSheet: View {
 
             FocusDeskGroupedPanel {
                 VStack(alignment: .leading, spacing: 12) {
+                    if !parentChoices.isEmpty {
+                        LabeledContent("Parent task") {
+                            ProjectTaskPicker(tasks: parentChoices, selection: $parentID, label: "Parent task", emptyChoice: "No parent").frame(height: 24)
+                        }
+                    }
                     Text("Title")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(FocusDeskStyle.sectionHeadingForeground)
@@ -90,7 +98,7 @@ struct TaskEditorSheet: View {
                 Button("Save") {
                     if onSave(
                         title.trimmingCharacters(in: .whitespacesAndNewlines),
-                        details.trimmingCharacters(in: .whitespacesAndNewlines)
+                        details.trimmingCharacters(in: .whitespacesAndNewlines), parentID
                     ) { dismiss() }
                 }
                 .keyboardShortcut(.defaultAction)

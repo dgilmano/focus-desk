@@ -1,4 +1,5 @@
 #if DEBUG
+import FocusDeskCore
 import XCTest
 @testable import FocusDesk
 
@@ -153,6 +154,7 @@ final class DeskTaskMapLayoutTests: XCTestCase {
         let data = try JSONEncoder().encode(arranged)
         var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         legacy.removeValue(forKey: "labels")
+        legacy.removeValue(forKey: "stepOffsets")
         let decoded = try JSONDecoder().decode(DeskMapArrangement.self, from: JSONSerialization.data(withJSONObject: legacy))
         XCTAssertEqual(decoded, arranged)
         let restored = base.placing(decoded, items: items, width: 500)
@@ -183,6 +185,124 @@ final class DeskTaskMapLayoutTests: XCTestCase {
         let newItems = ["Sport", "Learning", nil, "Untagged"].map(item)
         let newLayout = DeskTaskMapLayout(items: newItems, width: 720, projects: ["Sport"], groupOrder: layout.groups.map(\.id))
         XCTAssertEqual(layout.groups.map(\.id), newLayout.groups.map(\.id))
+    }
+
+    func testSubtasksAreHiddenUntilEveryAncestorIsExpanded() {
+        let root = UUID(), child = UUID(), nested = UUID(), other = UUID(), orphan = UUID()
+        let outline = TaskOutline([
+            .init(id: nested, parentID: child, title: "Verify", project: "Build"),
+            .init(id: other, parentID: root, title: "Other project", project: "Study"),
+            .init(id: orphan, parentID: UUID(), title: "Open child", project: "Build"),
+            .init(id: root, parentID: nil, title: "Ship", project: "BUILD"),
+            .init(id: child, parentID: root, title: "Package", project: "Build")
+        ])
+        XCTAssertEqual(outline.rows(expanded: []).map(\.id), [other, orphan, root])
+        XCTAssertEqual(outline.rows(expanded: [child]).map(\.id), [other, orphan, root])
+        XCTAssertEqual(outline.rows(expanded: [root]).map(\.id), [other, orphan, root, child])
+        XCTAssertEqual(outline.rows(expanded: [root, child]).map(\.depth), [0, 0, 0, 1, 2])
+        XCTAssertEqual(outline.path(to: nested), "Ship › Package › Verify")
+        XCTAssertEqual(outline.rows().map(\.id), [other, orphan, root, child, nested])
+        let cycle = TaskOutline([.init(id: root, parentID: child, title: "A", project: ""),
+                                 .init(id: child, parentID: root, title: "B", project: "")])
+        XCTAssertEqual(cycle.rows().map(\.id), [root, child])
+    }
+
+    func testStepClustersRespectTaskPositionsCanvasEdgesAndOtherBranches() {
+        var items = ["Work", "Home", "Work", "Home"].map(item)
+        let checklist = NextStepChecklist("1. Prepare\n- [x] Check\n- [ ] Ship")
+        for i in items.indices { items[i].steps = checklist.items }
+        for width: CGFloat in [270, 400, 760, 1000] {
+            let base = DeskTaskMapLayout(items: items, width: width)
+            let drag = DeskMapDrag(target: .task(items[0].id), translation: CGSize(width: 100, height: 94))
+            for layout in [base, base.moving(drag, items: items, width: width)] {
+                let cluster = DeskMapSteps(layout: layout, items: items, width: width)
+                let area = CGRect(x: 0, y: 0, width: width, height: cluster.height)
+                var occupied = layout.nodes.map(\.chipBounds) + layout.groups.map(\.hubBounds)
+                XCTAssertEqual(cluster.leaves.count, 12)
+                XCTAssertEqual(Set(cluster.leaves.map(\.id)).count, 12)
+                for leaf in cluster.leaves {
+                    XCTAssertTrue(area.contains(leaf.frame))
+                    XCTAssertFalse(occupied.contains { $0.intersects(leaf.frame) })
+                    occupied.append(leaf.frame)
+                    let index = items.firstIndex { $0.id == leaf.id.task }!
+                    XCTAssertEqual(leaf.parent, layout.nodes[index].center)
+                    XCTAssertEqual(leaf.step.text, checklist.items[leaf.id.index].text)
+                }
+            }
+        }
+    }
+
+    func testFastAndDeliberateClicksAreExclusiveAndTargetTheSameTask() {
+        var clicks = DeskMapClicks()
+        let a = DeskMapObject.task(UUID()), b = DeskMapObject.project("Build")
+        XCTAssertEqual(clicks.record(a, at: 1, doubleClickInterval: 0.5), .select)
+        XCTAssertEqual(clicks.record(a, at: 1.2, doubleClickInterval: 0.5), .doubleClick)
+        XCTAssertEqual(clicks.record(a, at: 1.3, doubleClickInterval: 0.5), .select)
+        XCTAssertEqual(clicks.record(a, at: 2.1, doubleClickInterval: 0.5), .rename)
+        XCTAssertEqual(clicks.record(a, at: 3, doubleClickInterval: 0.5), .select)
+        XCTAssertEqual(clicks.record(b, at: 3.2, doubleClickInterval: 0.5), .select)
+        XCTAssertEqual(clicks.record(b, at: 5, doubleClickInterval: 0.5), .select)
+        let owner = UUID()
+        let step = DeskMapObject.step(.init(task: owner, index: 0))
+        XCTAssertEqual(clicks.record(.task(owner), at: 6, doubleClickInterval: 0.5), .select)
+        XCTAssertEqual(clicks.record(step, at: 6.8, doubleClickInterval: 0.5), .select)
+        XCTAssertEqual(clicks.record(step, at: 7.6, doubleClickInterval: 0.5), .rename)
+    }
+
+    func testDraggedStepFollowsPointerAndParentAndRestoresWithinCanvas() throws {
+        var task = item("Work")
+        task.steps = NextStepChecklist("Prepare\nSend").items
+        let width: CGFloat = 700
+        let layout = DeskTaskMapLayout(items: [task], width: width)
+        let base = DeskMapSteps(layout: layout, items: [task], width: width)
+        let original = base.leaves[0]
+        let translation = CGSize(width: -36, height: -30)
+        let drag = DeskMapDrag(target: .step(original.key), translation: translation)
+        let moved = base.moving(drag, width: width)
+        let leaf = moved.leaves[0]
+        XCTAssertEqual(leaf.frame, original.frame.offsetBy(dx: -36, dy: -30))
+        XCTAssertEqual(leaf.parent, original.parent)
+        XCTAssertTrue(leaf.isManuallyPlaced)
+        XCTAssertEqual(moved.leaves[1].frame, base.leaves[1].frame)
+        XCTAssertFalse(moved.leaves[1].isManuallyPlaced)
+        XCTAssertNil(layout.dropTarget(for: drag, items: [task]))
+
+        var arrangement = DeskMapArrangement()
+        arrangement.stepOffsets[leaf.key] = leaf.offsetFromParent
+        XCTAssertFalse(arrangement.isEmpty)
+        let restored = try JSONDecoder().decode(DeskMapArrangement.self, from: JSONEncoder().encode(arrangement))
+        let reopened = DeskMapSteps(layout: layout, items: [task], width: width, offsets: restored.stepOffsets)
+        XCTAssertEqual(reopened.leaves[0].frame, leaf.frame)
+        for target in [DeskMapDrag.Target.task(task.id), .group(layout.groups[0].id)] {
+            let shifted = layout.moving(.init(target: target, translation: CGSize(width: 20, height: 15)), items: [task], width: width)
+            let branch = DeskMapSteps(layout: shifted, items: [task], width: width, offsets: restored.stepOffsets)
+            XCTAssertEqual(branch.leaves[0].frame, leaf.frame.offsetBy(dx: 20, dy: 15))
+            XCTAssertEqual(branch.leaves[0].parent, shifted.nodes[0].center)
+        }
+        let bounded = reopened.moving(.init(target: .step(leaf.key), translation: CGSize(width: -4000, height: 4000)), width: width)
+        XCTAssertEqual(bounded.leaves[0].frame.minX, 0)
+        XCTAssertEqual(bounded.leaves[0].frame.maxY, bounded.height)
+        let narrow = DeskTaskMapLayout(items: [task], width: 260)
+        let narrowBranch = DeskMapSteps(layout: narrow, items: [task], width: 260, offsets: restored.stepOffsets)
+        XCTAssertTrue(CGRect(x: 0, y: 0, width: 260, height: narrowBranch.height).contains(narrowBranch.leaves[0].frame))
+    }
+
+    func testStepPlacementSurvivesReorderingAndInlineRenameWithDuplicateNames() {
+        let task = UUID()
+        let labels = ["Plan", "Check", "Check"]
+        let keys = DeskMapSteps.PlacementKey.keys(task: task, labels: labels)
+        XCTAssertNotEqual(keys[1], keys[2])
+        var saved = DeskMapArrangement()
+        for i in keys.indices { saved.stepOffsets[keys[i]] = CGSize(width: i * 10, height: i * 15) }
+        let previous = saved.stepOffsets
+        let reordered = DeskMapSteps.PlacementKey.keys(task: task, labels: ["New", "Check", "Plan", "Check"])
+        XCTAssertEqual(reordered[2], keys[0])
+        XCTAssertEqual(reordered[3], keys[2])
+        XCTAssertNil(previous[reordered[0]])
+        saved.renameStep(at: 1, in: task, labels: labels, to: "Plan")
+        let renamed = DeskMapSteps.PlacementKey.keys(task: task, labels: ["Plan", "Plan", "Check"])
+        for i in keys.indices { XCTAssertEqual(saved.stepOffsets[renamed[i]], previous[keys[i]]) }
+        XCTAssertEqual(saved.stepOffsets.count, 3)
     }
 
     private func item(_ tag: String?) -> DeskTaskMapLayout.Item {

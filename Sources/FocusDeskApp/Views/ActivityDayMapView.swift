@@ -301,7 +301,8 @@ private struct ActivityIntervalEditor: View {
                 }
                 Picker("Task", selection: $draft.taskID) {
                     Text("No task").tag(nil as UUID?)
-                    ForEach(tasks) { task in Text(task.title).tag(Optional(task.id)) }
+                    let outline = TaskOutline(tasks.map(TaskOutline.Item.init))
+                    ForEach(outline.rows()) { row in Text(outline.path(to: row.id)).tag(Optional(row.id)) }
                     if let id = draft.taskID, !tasks.contains(where: { $0.id == id }) {
                         Text(draft.taskTitle ?? "Deleted task").tag(Optional(id))
                     }

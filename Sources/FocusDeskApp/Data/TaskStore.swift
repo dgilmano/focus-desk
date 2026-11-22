@@ -59,8 +59,28 @@ final class TaskStore {
         }
     }
 
-    func create(_ task: FocusTask) -> Bool {
-        perform { context.insert(task) }
+    func create(_ task: FocusTask, under parentID: UUID? = nil) -> Bool {
+        let previousProject = task.projectName
+        let previousParent = task.parentTaskID
+        return perform(rollback: {
+            task.projectName = previousProject
+            task.parentTaskID = previousParent
+        }) {
+            if let parentID {
+                let descriptor = FetchDescriptor<FocusTask>(predicate: #Predicate { $0.id == parentID })
+                guard let parent = try context.fetch(descriptor).first, parent.completedAt == nil else {
+                    throw DeskMapError(message: "This parent task is no longer open. Choose another parent.")
+                }
+                let name = parent.deskProjectTag?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let key = DeskProject.key(for: name)
+                if !key.isEmpty, try context.fetchCount(FetchDescriptor<DeskProject>(predicate: #Predicate { $0.key == key })) == 0 {
+                    context.insert(DeskProject(name: name))
+                }
+                task.projectName = name
+                task.parentTaskID = parentID
+            }
+            context.insert(task)
+        }
     }
 
     func recordJournal(for task: FocusTask, draft: String, at timestamp: Date) -> Bool {
@@ -222,13 +242,40 @@ final class TaskStore {
     }
 }
 
-#if DEBUG || FOCUS_DESK_PERSONAL
 struct DeskMapError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
 }
 
+#if DEBUG || FOCUS_DESK_PERSONAL
 extension TaskStore {
+    func createSubtask(named input: String, under parentID: UUID) throws -> FocusTask {
+        let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw DeskMapError(message: "Enter a subtask name.") }
+        var last = FetchDescriptor<FocusTask>(sortBy: [SortDescriptor(\.sortOrder, order: .reverse)])
+        last.fetchLimit = 1
+        let order = try context.fetch(last).first?.sortOrder ?? -1
+        let task = FocusTask(title: name, sortOrder: order + 1)
+        guard create(task, under: parentID) else { throw DeskMapError(message: errorMessage ?? "Could not create the subtask.") }
+        return task
+    }
+
+    func renameNextStep(_ index: Int, in taskID: UUID, from source: String, to input: String) throws {
+        let descriptor = FetchDescriptor<FocusTask>(predicate: #Predicate { $0.id == taskID })
+        guard let task = try context.fetch(descriptor).first, task.completedAt == nil, task.nextStep == source else {
+            throw DeskMapError(message: "The steps have changed. Reopen the step to edit its current name.")
+        }
+        guard let updated = NextStepChecklist(source).renaming(index, to: input) else {
+            throw DeskMapError(message: "Enter a step name on one line.")
+        }
+        guard updated != source else { return }
+        let previousDate = task.updatedAt
+        guard perform(rollback: { task.nextStep = source; task.updatedAt = previousDate }, {
+            task.nextStep = updated
+            task.updatedAt = Date()
+        }) else { throw DeskMapError(message: errorMessage ?? "Could not rename the step.") }
+    }
+
     func renameTask(id: UUID, from original: String, to input: String) throws {
         let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw DeskMapError(message: "Enter a task name.") }
