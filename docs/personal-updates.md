@@ -51,7 +51,7 @@ Changes to source alone do not produce an update. A reviewed, versioned release 
 - Developer ID: separate future stable feed and Apple signing/notarization. The personal publisher refuses this channel. Test signing and sandbox-container transition before switching.
 - App Store: separate target without Sparkle or external update permissions; updates through the App Store only.
 
-Requests go to GitHub's raw-content and release-download services. GitHub receives normal connection metadata such as IP address and the updater's HTTP user agent. No task text, Journal, tags, activity history or backups are sent. Sparkle system-profile submission and background downloads/checks are disabled. Cloud sign-in remains an unrelated placeholder, not working sync.
+Update requests go to GitHub's raw-content and release-download services. GitHub receives normal connection metadata such as IP address and the updater's HTTP user agent. No task text, Journal, tags, activity history or backups are sent. Sparkle system-profile submission and background downloads/checks are disabled. Separately, the optional voice widget sends audio to OpenAI on Transcribe. Create draft sends the note, any task instructions and, for updates, the selected task’s title, description and next steps. The personal app uses its own API key, supplied by the user.
 
 ## Verification
 

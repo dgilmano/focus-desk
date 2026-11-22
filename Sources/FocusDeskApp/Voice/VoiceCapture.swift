@@ -1,4 +1,4 @@
-#if DEBUG && !FOCUS_DESK_UPDATES
+#if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
 import AVFoundation
 import Foundation
 import Observation
@@ -13,7 +13,7 @@ final class VoiceCapture: NSObject, AVAudioRecorderDelegate {
 
     func start() async throws {
         guard Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil else {
-            throw VoiceNoteError.message("Open the Focus Desk Dev app to record audio, or type your note here.")
+            throw VoiceNoteError.message("Open the Focus Desk app to record audio, or type your note here.")
         }
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
             throw VoiceNoteError.message("Allow microphone access in System Settings → Privacy & Security → Microphone, or type your note.")

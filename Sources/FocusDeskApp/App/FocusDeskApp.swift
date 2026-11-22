@@ -59,7 +59,7 @@ struct FocusDeskApp: App {
             FocusDeskCommands(tasks: workspace.session?.tasks)
         }
 
-        #if DEBUG && !FOCUS_DESK_UPDATES
+        #if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
         Settings {
             OpenAITaskSettings()
                 .preferredColorScheme(isDarkTheme ? .dark : .light)

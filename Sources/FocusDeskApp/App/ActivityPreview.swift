@@ -79,4 +79,8 @@ enum ActivityPreview {
     }
 
 }
+#else
+enum ActivityPreview {
+    static let isActive = false
+}
 #endif

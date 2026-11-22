@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG || FOCUS_DESK_PERSONAL
 import AppKit
 import SwiftUI
 

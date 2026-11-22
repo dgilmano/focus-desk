@@ -14,7 +14,7 @@ class ReleaseTests(unittest.TestCase):
                 "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
                 "LSMinimumSystemVersion": "14.0", "LSRequiresNativeExecution": True,
                 "CFBundleIconFile": "AppIcon.icns",
-                **({"NSMicrophoneUsageDescription": "Record voice notes"} if mode == "local" else {})}
+                **({"NSMicrophoneUsageDescription": "Record voice notes"} if mode in ("local", "personal") else {})}
 
     def entitlements(self):
         return release.read_plist(release.ROOT / "Config/FocusDesk.entitlements")
@@ -56,13 +56,24 @@ class ReleaseTests(unittest.TestCase):
         entitlements = {**self.entitlements(), "com.apple.security.network.client": True,
                         "com.apple.security.temporary-exception.mach-lookup.global-name":
                         [release.BUNDLE_ID + "-spks", release.BUNDLE_ID + "-spki"]}
-        for mode in ["personal", "direct"]:
-            release.validate_entitlements(entitlements, mode)
+        personal = release.read_plist(release.ROOT / "Config/FocusDeskPersonal.entitlements")
+        personal["com.apple.security.temporary-exception.mach-lookup.global-name"] = [
+            value.replace("$(PRODUCT_BUNDLE_IDENTIFIER)", release.BUNDLE_ID)
+            for value in personal["com.apple.security.temporary-exception.mach-lookup.global-name"]
+        ]
+        for mode, expected in [("personal", personal), ("direct", entitlements)]:
+            release.validate_entitlements(expected, mode)
             with self.assertRaises(ValueError):
                 release.validate_entitlements(self.entitlements(), mode)
-        entitlements["com.apple.security.temporary-exception.mach-lookup.global-name"].append("*")
+        with self.assertRaises(ValueError):
+            release.validate_metadata(self.metadata("direct"), "personal")
         with self.assertRaises(ValueError):
             release.validate_entitlements(entitlements, "personal")
+        with self.assertRaises(ValueError):
+            release.validate_entitlements(personal, "direct")
+        personal["com.apple.security.temporary-exception.mach-lookup.global-name"].append("*")
+        with self.assertRaises(ValueError):
+            release.validate_entitlements(personal, "personal")
 
     def test_sandbox_cannot_be_disabled(self):
         for mode in ["local", "direct", "app-store"]:

@@ -1,4 +1,4 @@
-#if DEBUG && !FOCUS_DESK_UPDATES
+#if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
 import Foundation
 
 struct VoiceTaskContext: Identifiable, Encodable, Equatable, Sendable {

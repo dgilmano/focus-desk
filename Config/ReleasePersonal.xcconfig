@@ -4,6 +4,9 @@
 // Personal, locally installed build. Update archives have a separate Ed25519 signature.
 // Never treat this as Developer ID signed or notarized distribution.
 FOCUS_DESK_DISTRIBUTION = personal
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) FOCUS_DESK_UPDATES FOCUS_DESK_PERSONAL
+INFOPLIST_PREPROCESSOR_DEFINITIONS = FOCUS_DESK_UPDATES=1 FOCUS_DESK_VOICE=1
+CODE_SIGN_ENTITLEMENTS = Config/FocusDeskPersonal.entitlements
 CODE_SIGN_IDENTITY = -
 CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO
 DEVELOPMENT_TEAM =

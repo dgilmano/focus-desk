@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG || FOCUS_DESK_PERSONAL
 import SwiftUI
 
 struct DeskToolbar: View {
@@ -30,7 +30,7 @@ struct DeskToolbar: View {
                     .font(.system(size: 28, weight: .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 8)
-                #if !FOCUS_DESK_UPDATES
+                #if !FOCUS_DESK_UPDATES || FOCUS_DESK_PERSONAL
                 Button(action: voiceNote) {
                     Image(systemName: "mic")
                         .font(.system(size: 14))

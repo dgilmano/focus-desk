@@ -70,8 +70,8 @@ def validate_metadata(info, mode):
     require(info.get("LSMinimumSystemVersion") == "14.0", "Unexpected minimum macOS version.")
     require(info.get("LSRequiresNativeExecution") is True, "Native execution must be required.")
     require(info.get("CFBundleIconFile"), "App icon is missing from Info.plist.")
-    if mode == "local":
-        require(info.get("NSMicrophoneUsageDescription"), "The dev voice recorder needs a microphone usage description.")
+    if mode in ("local", "personal"):
+        require(info.get("NSMicrophoneUsageDescription"), "Voice notes require a microphone usage description.")
     validate_versions(info.get("CFBundleShortVersionString", ""), info.get("CFBundleVersion", ""))
 
 
@@ -82,9 +82,13 @@ def validate_entitlements(entitlements, mode, bundle_id=BUNDLE_ID):
     allowed = {"com.apple.security.app-sandbox", "com.apple.security.files.user-selected.read-write",
                "com.apple.application-identifier", "com.apple.developer.team-identifier"}
     if mode == "local":
+        allowed.add("com.apple.security.get-task-allow")
+    if mode in ("local", "personal"):
         voice = {"com.apple.security.network.client", "com.apple.security.device.audio-input"}
-        allowed.update(voice | {"com.apple.security.get-task-allow"})
+        allowed.update(voice)
         require(all(entitlements.get(key) is True for key in voice), "Voice note permissions are missing.")
+    if mode == "update-test":
+        allowed.add("com.apple.security.device.audio-input")
     if mode in ("personal", "direct", "update-test"):
         allowed.update({"com.apple.security.network.client", "com.apple.security.temporary-exception.mach-lookup.global-name"})
         require(entitlements.get("com.apple.security.network.client") is True, "Updater network access is missing.")

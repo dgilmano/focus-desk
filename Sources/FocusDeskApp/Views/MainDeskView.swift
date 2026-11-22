@@ -4,7 +4,7 @@ import FocusDeskCore
 import SwiftData
 import SwiftUI
 
-#if DEBUG && !FOCUS_DESK_UPDATES
+#if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
 private struct VoiceNoteSession: Identifiable {
     let id = UUID()
     let current: VoiceTaskContext?
@@ -38,7 +38,7 @@ struct MainDeskView: View {
 
     @Query(sort: \FocusTask.sortOrder, order: .forward)
     private var tasks: [FocusTask]
-    #if DEBUG
+    #if DEBUG || FOCUS_DESK_PERSONAL
     @Query(sort: \DeskProject.key) private var projects: [DeskProject]
     #endif
 
@@ -55,10 +55,10 @@ struct MainDeskView: View {
     @State private var sidebarDragStartWidth: Double?
     @State private var taskToDelete: FocusTask?
     @State private var showingGoogleCloudSettings = false
-    #if DEBUG
+    #if DEBUG || FOCUS_DESK_PERSONAL
     @State private var readDeskNotices = Set<String>()
     #endif
-    #if DEBUG && !FOCUS_DESK_UPDATES
+    #if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
     @State private var voiceSession: VoiceNoteSession?
     @State private var voiceAPIKey = ""
     #endif
@@ -217,7 +217,7 @@ struct MainDeskView: View {
             normalizeSidebarWidth()
             ensureValidSelection()
             refreshWidgetSnapshot()
-            #if !DEBUG
+            #if !DEBUG && !FOCUS_DESK_PERSONAL
             noteFocused = true
             #endif
         }
@@ -228,7 +228,7 @@ struct MainDeskView: View {
         .onChange(of: currentTaskIDRaw) {
             refreshWidgetSnapshot()
         }
-        #if DEBUG && !FOCUS_DESK_UPDATES
+        #if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
         .disabled(voiceSession != nil)
         .accessibilityHidden(voiceSession != nil)
         .overlayPreferenceValue(VoiceButtonAnchor.self) { anchor in
@@ -718,13 +718,13 @@ struct MainDeskView: View {
         ScrollViewReader { scroll in
             VStack(spacing: 0) {
                 Group {
-                    #if DEBUG
+                    #if DEBUG || FOCUS_DESK_PERSONAL
                     if selectedSection == .desk {
                         DeskToolbar(
                             tasks: activeTasks, projectNames: projects.map(\.name), currentTaskID: currentTask?.id,
                             isDarkTheme: $isDarkTheme, readNotices: $readDeskNotices,
                             voiceNote: {
-                                #if !FOCUS_DESK_UPDATES
+                                #if !FOCUS_DESK_UPDATES || FOCUS_DESK_PERSONAL
                                 voiceSession = VoiceNoteSession(current: currentTask.map(VoiceTaskContext.init))
                                 #endif
                             },
@@ -762,7 +762,7 @@ struct MainDeskView: View {
                 .transition(.opacity)
         case .desk:
             if let task = currentTask {
-                #if DEBUG
+                #if DEBUG || FOCUS_DESK_PERSONAL
                 openDeskWorkspace(task)
                 #else
                 taskWorkspace(task)
@@ -1035,7 +1035,7 @@ struct MainDeskView: View {
                      })
     }
 
-    #if DEBUG
+    #if DEBUG || FOCUS_DESK_PERSONAL
     private func openDeskWorkspace(_ task: FocusTask) -> some View {
         GeometryReader { proxy in
             let width = max(1, FocusDeskStyle.workspaceContentWidth(for: proxy.size.width, insets: FocusDeskStyle.deskInsets))
@@ -1104,7 +1104,7 @@ struct MainDeskView: View {
         }
     }
 
-    #if DEBUG && !FOCUS_DESK_UPDATES
+    #if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
     private func saveVoiceTask(_ draft: VoiceTaskReview, target: VoiceTaskContext?) throws -> VoiceTaskContext? {
         guard let task = try taskStore.saveVoiceReview(draft, target: target) else { return nil }
         select(task.id)

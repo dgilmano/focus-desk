@@ -222,7 +222,7 @@ final class TaskStore {
     }
 }
 
-#if DEBUG
+#if DEBUG || FOCUS_DESK_PERSONAL
 struct DeskMapError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
@@ -317,7 +317,7 @@ extension TaskStore {
 }
 #endif
 
-#if DEBUG && !FOCUS_DESK_UPDATES
+#if (DEBUG && !FOCUS_DESK_UPDATES) || FOCUS_DESK_PERSONAL
 extension TaskStore {
     func saveVoiceReview(_ review: VoiceTaskReview, target: VoiceTaskContext?) throws -> FocusTask? {
         let tasks = try context.fetch(FetchDescriptor<FocusTask>(sortBy: [SortDescriptor(\.sortOrder)]))
