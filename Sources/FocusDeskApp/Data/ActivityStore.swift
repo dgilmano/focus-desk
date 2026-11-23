@@ -9,6 +9,8 @@ final class ActivityStore {
     private(set) var categories: [ActivityCategory] = []
     private(set) var intervals: [ActivityInterval] = []
     private(set) var trackingSessions: [TrackingSession] = []
+    // Resume is available for the rest of this tracking session. Time itself lives in intervals.
+    private(set) var pausedTaskCategories: [UUID: UUID] = [:]
     var errorMessage: String?
     private(set) var notice: String?
     @ObservationIgnored private var context: ModelContext
@@ -87,7 +89,7 @@ final class ActivityStore {
     @discardableResult
     func stopTracking(at now: Date = Date(), reason: String? = nil) -> Bool {
         guard activeTrackingSession != nil || activeInterval != nil else { return true }
-        return commit {
+        let stopped = commit {
             if let active = activeInterval {
                 active.endedAt = max(active.startedAt, now)
                 active.lastObservedAt = active.endedAt!
@@ -98,10 +100,25 @@ final class ActivityStore {
             }
             notice = reason
         }
+        if stopped { pausedTaskCategories.removeAll() }
+        return stopped
     }
 
     func category(_ id: UUID?) -> ActivityCategory? { categories.first { $0.id == id } }
     func interval(_ id: UUID) -> ActivityInterval? { intervals.first { $0.id == id } }
+
+    func taskDurationsToday(at now: Date, calendar: Calendar = .current) -> [UUID: TimeInterval] {
+        let start = calendar.startOfDay(for: now)
+        var durations: [UUID: TimeInterval] = [:]
+        // Intervals are ordered and cannot overlap, so previous days need not be scanned.
+        for interval in intervals.reversed() {
+            let end = min(interval.endedAt ?? now, now)
+            if end <= start && interval.startedAt < start { break }
+            guard let task = interval.taskID else { continue }
+            durations[task, default: 0] += max(0, end.timeIntervalSince(max(start, interval.startedAt)))
+        }
+        return durations
+    }
 
     @discardableResult
     func toggleActivity(_ categoryID: UUID, at now: Date = Date()) -> Bool {
@@ -114,14 +131,32 @@ final class ActivityStore {
         guard let session = activeTrackingSession, now >= session.startedAt,
               let category = category(categoryID), !category.isArchived else { return false }
         guard activeInterval?.categoryID != categoryID else { return true }
+        return startInterval(categoryID, taskID: nil, title: nil, at: now)
+    }
+
+    @discardableResult
+    func startTask(_ taskID: UUID, title: String, categoryID: UUID, at now: Date = Date()) -> Bool {
+        guard let category = category(categoryID), !category.isArchived else { return false }
+        if let session = activeTrackingSession {
+            guard now >= session.startedAt else { return false }
+            if activeInterval?.taskID == taskID, activeInterval?.categoryID == categoryID { return true }
+        }
+        let started = startInterval(categoryID, taskID: taskID, title: title, at: now)
+        if started { pausedTaskCategories.removeValue(forKey: taskID) }
+        return started
+    }
+
+    private func startInterval(_ categoryID: UUID, taskID: UUID?, title: String?, at now: Date) -> Bool {
         return commit {
+            if taskID != nil { try beginTracking(at: now) }
             if let activeInterval {
                 activeInterval.endedAt = max(activeInterval.startedAt, now)
                 activeInterval.lastObservedAt = activeInterval.endedAt!
             }
             let snapshot = ActivityIntervalSnapshot(categoryID: categoryID, start: now)
             try ActivityTimeline.validate(snapshot, among: snapshots, now: now)
-            context.insert(ActivityInterval(id: snapshot.id, categoryID: categoryID, start: now))
+            context.insert(ActivityInterval(id: snapshot.id, categoryID: categoryID, start: now,
+                                            taskID: taskID, taskTitle: title))
             notice = nil
         }
     }
@@ -129,11 +164,30 @@ final class ActivityStore {
     @discardableResult
     func pause(at now: Date = Date(), reason: String? = nil) -> Bool {
         guard let activeInterval else { return true }
-        return commit {
+        let paused = commit {
             activeInterval.endedAt = max(activeInterval.startedAt, now)
             activeInterval.lastObservedAt = activeInterval.endedAt!
             notice = reason
         }
+        if paused, let task = activeInterval.taskID, activeTrackingSession != nil {
+            pausedTaskCategories[task] = activeInterval.categoryID
+        }
+        return paused
+    }
+
+    @discardableResult
+    func pauseTask(_ id: UUID, at now: Date = Date()) -> Bool {
+        guard activeInterval?.taskID == id else { return false }
+        return pause(at: now)
+    }
+
+    @discardableResult
+    func stopTask(_ id: UUID, at now: Date = Date()) -> Bool {
+        if activeInterval?.taskID == id {
+            guard pause(at: now) else { return false }
+        }
+        pausedTaskCategories.removeValue(forKey: id)
+        return true
     }
 
     @discardableResult
@@ -231,13 +285,14 @@ final class ActivityStore {
 
     func setArchived(_ id: UUID, _ archived: Bool) {
         guard let category = category(id) else { return }
-        _ = commit {
+        let saved = commit {
             if archived, let active = activeInterval, active.categoryID == id {
                 active.endedAt = max(active.startedAt, Date())
                 active.lastObservedAt = active.endedAt!
             }
             category.isArchived = archived
         }
+        if saved && archived { pausedTaskCategories = pausedTaskCategories.filter { $0.value != id } }
     }
 
     func checkpoint(at date: Date = Date()) {
@@ -291,6 +346,7 @@ final class ActivityStore {
     }
 
     func reloadAfterRestore() {
+        pausedTaskCategories.removeAll()
         context = ModelContext(container)
         context.autosaveEnabled = false
         do {

@@ -14,8 +14,9 @@ struct DeskMapDrag: Equatable {
     var location: CGPoint?
 }
 
-/// Store only manual placements. Steps stay at a point offset from their owning task.
+/// Persist the visible branches along with their manual placements.
 struct DeskMapArrangement: Codable, Equatable {
+    var expandedTasks: Set<UUID> = []
     var tasks: [UUID: CGPoint] = [:]
     var stepOffsets: [DeskMapSteps.PlacementKey: CGSize] = [:]
     var groups: [String: CGPoint] = [:]
@@ -24,10 +25,11 @@ struct DeskMapArrangement: Codable, Equatable {
     var groupOrder: [String] = []
     var isEmpty: Bool { tasks.isEmpty && stepOffsets.isEmpty && groups.isEmpty && labels.isEmpty && groupOrder.isEmpty }
 
-    init() {}
+    init(expandedTasks: Set<UUID> = []) { self.expandedTasks = expandedTasks }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        expandedTasks = try values.decodeIfPresent(Set<UUID>.self, forKey: .expandedTasks) ?? []
         tasks = try values.decode([UUID: CGPoint].self, forKey: .tasks)
         stepOffsets = try values.decodeIfPresent([DeskMapSteps.PlacementKey: CGSize].self, forKey: .stepOffsets) ?? [:]
         groups = try values.decode([String: CGPoint].self, forKey: .groups)

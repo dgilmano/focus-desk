@@ -156,7 +156,15 @@ struct DeskTaskMap: View {
     private var storedArrangement = Data()
     @State private var arrangement = DeskMapArrangement()
     @State private var selectedGroupID: String?
-    @State private var expandedTasks = Set<UUID>()
+    private var expandedTasks: Set<UUID> {
+        get { arrangement.expandedTasks }
+        nonmutating set {
+            guard newValue != arrangement.expandedTasks else { return }
+            var next = arrangement
+            next.expandedTasks = newValue
+            save(next)
+        }
+    }
     @State private var clicks = DeskMapClicks()
     @State private var editingName: DeskMapRename?
     @State private var nameText = ""
@@ -164,6 +172,7 @@ struct DeskTaskMap: View {
     @State private var addingUnder: FocusTask?
     @State private var moveError: String?
     @Environment(TaskStore.self) private var taskStore
+    @Environment(ActivityStore.self) private var activity
     @FocusState private var mapFocused: Bool
     @GestureState private var drag: DeskMapDrag?
     @Namespace private var mapSpace
@@ -173,6 +182,15 @@ struct DeskTaskMap: View {
     private var selectedFill: Color { scheme == .dark ? .white : Color(white: 0.16) }
 
     var body: some View {
+        TimelineView(.periodic(from: Date(timeIntervalSinceReferenceDate: 0),
+                               by: activity.activeInterval?.taskID == nil ? 60 : 10)) { clock in
+            map(at: max(clock.date, Date()))
+        }
+    }
+
+    private func map(at now: Date) -> some View {
+        let durations = activity.taskDurationsToday(at: now)
+        let runningID = activity.activeInterval?.taskID
         let outline = TaskOutline(tasks.map(TaskOutline.Item.init))
         let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
         let rows = outline.rows(expanded: showsList ? nil : expandedTasks)
@@ -198,14 +216,14 @@ struct DeskTaskMap: View {
         }
         let height = showsList ? max(105, CGFloat(items.count) * rowHeight) : branches.height
 
-        VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(showsList ? "Task list" : "Task map")
                     .font(.system(size: 13, weight: .semibold)).accessibilityAddTraits(.isHeader)
                 Spacer()
                 if !showsList && !arrangement.isEmpty {
                     Button {
-                        save(DeskMapArrangement())
+                        save(DeskMapArrangement(expandedTasks: expandedTasks))
                     } label: {
                         Image(systemName: "arrow.counterclockwise")
                     }
@@ -264,6 +282,9 @@ struct DeskTaskMap: View {
                 }
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     let node = layout.nodes[index]
+                    let elapsed = durations[item.id, default: 0]
+                    let running = item.id == runningID
+                    let pausedCategory = activity.pausedTaskCategories[item.id]
                     let cy = (CGFloat(index) + 0.5) * rowHeight
                     let disclosureWidth = min(node.chipWidth, DeskTaskMapLayout.Node.disclosureWidth)
                     if showsList {
@@ -281,7 +302,8 @@ struct DeskTaskMap: View {
                     DeskMapTaskChip(title: item.title, disclosureWidth: showsList ? nil : disclosureWidth,
                                     canExpand: item.hasChildren, isExpanded: expandedTasks.contains(item.id),
                                     toggle: { toggleBranch(item.id) }) {
-                        taskButton(item, width: showsList ? node.titleWidth : node.chipWidth - disclosureWidth)
+                        taskButton(item, width: showsList ? node.titleWidth : node.chipWidth - disclosureWidth,
+                                   elapsed: elapsed, running: running, paused: pausedCategory != nil)
                             .highPriorityGesture(dragGesture(.task(item.id), onDrop: onDrop) { time in
                                 taskClick(item, time: time)
                             })
@@ -289,6 +311,8 @@ struct DeskTaskMap: View {
                             .accessibilityAction(named: "Rename task") { beginRename(.task(item.id), title: item.title) }
                     }
                     .contextMenu {
+                        timerMenu(item, elapsed: elapsed, running: running, pausedCategory: pausedCategory)
+                        Divider()
                         Button("Add subtask…", systemImage: "plus") { addingUnder = displayed[index] }
                         if item.hasChildren && !showsList {
                             Button(expandedTasks.contains(item.id) ? "Collapse branch" : "Expand branch") { toggleBranch(item.id) }
@@ -317,6 +341,9 @@ struct DeskTaskMap: View {
             .clipped()
             if let nameError {
                 Text(nameError).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            }
+            if let error = activity.errorMessage {
+                Text(error).font(.caption).foregroundStyle(.red)
             }
             HStack {
                 if showsList { Text("Task / Project") }
@@ -594,12 +621,54 @@ struct DeskTaskMap: View {
         .accessibilityAddTraits(showsList == list ? .isSelected : [])
     }
 
-    private func taskButton(_ item: DeskTaskMapLayout.Item, width: CGFloat) -> some View {
+    @ViewBuilder private func timerMenu(_ item: DeskTaskMapLayout.Item, elapsed: TimeInterval,
+                                        running: Bool, pausedCategory: UUID?) -> some View {
+        Text("Today · \(ActivityTimeText.duration(elapsed))")
+        if running {
+            Button("Pause timer", systemImage: "pause") { activity.pauseTask(item.id) }
+            Button("Stop timer", systemImage: "stop") { activity.stopTask(item.id) }
+        } else {
+            let categories = activity.availableCategories
+            let preferred = activity.category(pausedCategory) ?? activity.activeCategory
+                ?? categories.first(where: { $0.name.caseInsensitiveCompare("Work") == .orderedSame }) ?? categories.first
+            let start = activity.activeTrackingSession == nil ? "Start day and timer" : "Start timer"
+            let action = pausedCategory == nil ? start : "Resume timer"
+            if let preferred {
+                Button("\(action) · \(preferred.name)", systemImage: "play") {
+                    activity.startTask(item.id, title: item.title, categoryID: preferred.id)
+                }
+                if categories.count > 1 {
+                    Menu("Track as…") {
+                        ForEach(categories) { category in
+                            Button(category.name, systemImage: category.symbol) {
+                                activity.startTask(item.id, title: item.title, categoryID: category.id)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text("Add an activity in Day tracker to start a timer")
+            }
+            if pausedCategory != nil {
+                Button("Stop timer", systemImage: "stop") { activity.stopTask(item.id) }
+            }
+        }
+    }
+
+    private func taskButton(_ item: DeskTaskMapLayout.Item, width: CGFloat, elapsed: TimeInterval,
+                            running: Bool, paused: Bool) -> some View {
         let selected = item.id == selectedID
         let shape = RoundedRectangle(cornerRadius: showsList ? 4 : 12)
+        let status = running ? "Timer running" : (paused ? "Timer paused" : nil)
+        let time = "Today · \(ActivityTimeText.duration(elapsed))"
         return Button { selectTask(item.id) } label: {
             HStack(spacing: 5) {
-                Circle().fill(selected ? item.palette.background : item.palette.foreground).frame(width: 6, height: 6)
+                if running || paused {
+                    Image(systemName: running ? "play.fill" : "pause.fill")
+                        .font(.system(size: 8, weight: .semibold))
+                } else {
+                    Circle().fill(selected ? item.palette.background : item.palette.foreground).frame(width: 6, height: 6)
+                }
                 if item.hasChildren && !showsList {
                     Image(systemName: expandedTasks.contains(item.id) ? "chevron.down" : "chevron.right")
                         .font(.system(size: 8, weight: .semibold)).accessibilityHidden(true)
@@ -609,14 +678,25 @@ struct DeskTaskMap: View {
             .padding(.horizontal, 6)
             .frame(width: width, height: 22)
             .foregroundStyle(selected ? FocusDeskStyle.groupedBackground : Color.primary)
-            .background(shape.fill(selected ? selectedFill : FocusDeskStyle.groupedBackground))
+            .background(alignment: .leading) {
+                shape.fill(selected ? selectedFill : FocusDeskStyle.groupedBackground)
+                    .overlay(alignment: .leading) {
+                        if elapsed > 0 || running {
+                            Rectangle().fill(Color(nsColor: .systemGreen).opacity(selected ? 0.42 : 0.29))
+                                .frame(width: min(width, max(4, width * elapsed / 3600)))
+                        }
+                    }
+                    .clipShape(shape)
+            }
             .overlay { if !selected { shape.strokeBorder(item.palette.foreground.opacity(0.25)) } }
             .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .help(showsList ? "Click twice with a pause to rename." : (item.hasChildren ? "Double-click to show or hide subtasks and next steps. " : "") + "Click twice with a pause to rename. Right-click to add a subtask.")
+        .help([status, time, !showsList && item.hasChildren ? "Double-click to show or hide subtasks and next steps." : nil,
+               "Click twice with a pause to rename. Right-click for timer and task actions."]
+            .compactMap { $0 }.joined(separator: "\n"))
         .accessibilityLabel(item.title)
-        .accessibilityValue([item.tag ?? "Untagged", item.hasChildren && !showsList ? (expandedTasks.contains(item.id) ? "Branch expanded" : "Branch collapsed") : nil]
+        .accessibilityValue([item.tag ?? "Untagged", status, time, item.hasChildren && !showsList ? (expandedTasks.contains(item.id) ? "Branch expanded" : "Branch collapsed") : nil]
             .compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

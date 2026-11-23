@@ -5,6 +5,89 @@ import FocusDeskCore
 
 @MainActor
 final class TrackingSessionTests: XCTestCase {
+    func testTaskTimersShareDayTrackerAndKeepPauseAndStopSeparate() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let store = ActivityStore(container: container, observeLifecycle: false)
+        let start = Date(timeIntervalSince1970: 1_700_010_000)
+        let first = UUID(), second = UUID(), work = store.categories[0].id
+        XCTAssertTrue(store.startTask(first, title: "Parent", categoryID: work, at: start))
+        XCTAssertTrue(store.startTask(first, title: "Parent", categoryID: work, at: start))
+        XCTAssertEqual(store.trackingSessions.count, 1)
+        XCTAssertEqual(store.intervals.count, 1)
+        XCTAssertTrue(store.startTask(second, title: "Child", categoryID: work, at: start.addingTimeInterval(60)))
+        XCTAssertEqual(store.activeInterval?.taskTitle, "Child")
+        XCTAssertFalse(store.pauseTask(first))
+        XCTAssertTrue(store.pauseTask(second, at: start.addingTimeInterval(100)))
+        XCTAssertEqual(store.pausedTaskCategories[second], work)
+        XCTAssertNil(store.activeInterval)
+        XCTAssertTrue(store.startTask(second, title: "Child", categoryID: work, at: start.addingTimeInterval(150)))
+        XCTAssertNil(store.pausedTaskCategories[second])
+        XCTAssertTrue(store.stopTask(first))
+        XCTAssertEqual(store.activeInterval?.taskID, second)
+        XCTAssertTrue(store.stopTask(second, at: start.addingTimeInterval(170)))
+        XCTAssertTrue(store.pausedTaskCategories.isEmpty)
+        XCTAssertNil(store.activeInterval)
+        XCTAssertNotNil(store.activeTrackingSession)
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        XCTAssertEqual(store.taskDurationsToday(at: start.addingTimeInterval(200), calendar: calendar),
+                       [first: 60, second: 60])
+        XCTAssertTrue(store.startTask(first, title: "Parent", categoryID: work, at: start.addingTimeInterval(210)))
+        XCTAssertTrue(store.toggleActivity(work, at: start.addingTimeInterval(220)))
+        XCTAssertEqual(store.pausedTaskCategories[first], work)
+        XCTAssertTrue(store.stopTracking(at: start.addingTimeInterval(230)))
+        XCTAssertTrue(store.pausedTaskCategories.isEmpty)
+        let saved = try ModelContext(container).fetch(FetchDescriptor<ActivityInterval>())
+        XCTAssertEqual(saved.count, 4)
+        XCTAssertTrue(saved.allSatisfy { $0.taskID != nil && $0.endedAt != nil })
+    }
+
+    func testTaskTintUsesOnlyTimeInsideLocalDayIncludingAnOngoingInterval() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let store = ActivityStore(container: container, observeLifecycle: false)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Istanbul"))
+        let midnight = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_700_000_000))
+        let task = UUID(), work = store.categories[0].id
+        XCTAssertTrue(store.startTask(task, title: "First", categoryID: work, at: midnight.addingTimeInterval(-900)))
+        XCTAssertEqual(store.taskDurationsToday(at: midnight.addingTimeInterval(90), calendar: calendar)[task], 90)
+        XCTAssertTrue(store.pauseTask(task, at: midnight.addingTimeInterval(120)))
+        XCTAssertTrue(store.start(work, at: midnight.addingTimeInterval(130)))
+        XCTAssertTrue(store.stopTask(task, at: midnight.addingTimeInterval(135)))
+        XCTAssertEqual(store.activeInterval?.categoryID, work)
+        XCTAssertNil(store.activeInterval?.taskID)
+        XCTAssertTrue(store.stopTracking(at: midnight.addingTimeInterval(140)))
+        XCTAssertEqual(store.taskDurationsToday(at: midnight.addingTimeInterval(150), calendar: calendar), [task: 120])
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: midnight))
+        XCTAssertTrue(store.taskDurationsToday(at: tomorrow, calendar: calendar).isEmpty)
+    }
+
+    func testFailedTaskTimerChangesPreserveSessionIntervalsAndResumeState() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        var fail = false
+        let store = ActivityStore(container: container, observeLifecycle: false, saveChanges: { context in
+            if fail { throw BackupError.invalid("Simulated save failure") }
+            try context.save()
+        })
+        let task = UUID(), work = store.categories[0].id, start = Date().addingTimeInterval(-600)
+        fail = true
+        XCTAssertFalse(store.startTask(task, title: "Task", categoryID: work, at: start))
+        XCTAssertNil(store.activeTrackingSession)
+        XCTAssertTrue(store.intervals.isEmpty)
+        fail = false
+        XCTAssertTrue(store.startTask(task, title: "Task", categoryID: work, at: start))
+        fail = true
+        XCTAssertFalse(store.pauseTask(task, at: start.addingTimeInterval(30)))
+        XCTAssertEqual(store.activeInterval?.taskID, task)
+        XCTAssertTrue(store.pausedTaskCategories.isEmpty)
+        fail = false
+        XCTAssertTrue(store.pauseTask(task, at: start.addingTimeInterval(60)))
+        fail = true
+        XCTAssertFalse(store.startTask(task, title: "Task", categoryID: work, at: start.addingTimeInterval(120)))
+        XCTAssertEqual(store.pausedTaskCategories[task], work)
+        XCTAssertEqual(store.intervals.count, 1)
+    }
+
     func testActivityCannotStartUntilTrackingStartsOrAfterTrackingStops() throws {
         let container = try PersistenceController.makeModelContainer(inMemory: true)
         let store = ActivityStore(container: container, observeLifecycle: false)

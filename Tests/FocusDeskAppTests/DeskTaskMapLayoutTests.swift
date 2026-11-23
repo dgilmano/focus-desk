@@ -155,11 +155,22 @@ final class DeskTaskMapLayoutTests: XCTestCase {
         var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         legacy.removeValue(forKey: "labels")
         legacy.removeValue(forKey: "stepOffsets")
+        legacy.removeValue(forKey: "expandedTasks")
         let decoded = try JSONDecoder().decode(DeskMapArrangement.self, from: JSONSerialization.data(withJSONObject: legacy))
         XCTAssertEqual(decoded, arranged)
         let restored = base.placing(decoded, items: items, width: 500)
         XCTAssertEqual(restored.groups[0].label.x, 300, accuracy: 0.001)
         XCTAssertEqual(restored.nodes[0].center.x, 100, accuracy: 0.001)
+    }
+
+    func testMapReopensWithItsExpandedTasksAndManualPositions() throws {
+        let parent = UUID(), child = UUID()
+        var arrangement = DeskMapArrangement(expandedTasks: [parent, child])
+        arrangement.tasks[child] = CGPoint(x: 0.3, y: 0.7)
+        let saved = try JSONEncoder().encode(arrangement)
+        let reopened = try JSONDecoder().decode(DeskMapArrangement.self, from: saved)
+        XCTAssertEqual(reopened, arrangement)
+        XCTAssertEqual(DeskMapArrangement(expandedTasks: reopened.expandedTasks).expandedTasks, [parent, child])
     }
 
     func testDropTargetsUseThePointerAndThePlacedCloudIncludingEmptyProjects() throws {
