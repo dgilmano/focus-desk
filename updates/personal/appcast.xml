@@ -4,24 +4,24 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Focus Desk</title>
         <item>
-            <title>0.7.2</title>
-            <pubDate>Mon, 23 Nov 2026 23:18:29 +0300</pubDate>
-            <sparkle:version>12</sparkle:version>
-            <sparkle:shortVersionString>0.7.2</sparkle:shortVersionString>
+            <title>0.7.3</title>
+            <pubDate>Tue, 24 Nov 2026 11:55:40 +0300</pubDate>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>0.7.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Focus Desk 0.7.2
+            <description sparkle:format="markdown"><![CDATA[# Focus Desk 0.7.3
 
-- Task map remembers which branches you expanded when you switch pages or reopen Focus Desk. Subtasks and next steps return to their saved positions.
-- Right-click a task or subtask to start, pause, resume or stop its timer. Day tracker records the time under the task and activity you choose.
-- Each task fills with green as you spend time on it today. The fill reaches halfway at 30 minutes and the full width at one hour. The task menu shows the recorded time even after the bar fills.
+- Double-click the center dot of a project cloud in Task map to hide its tasks, subtasks and next steps. Double-click again to show them in their saved positions.
+- Right-click a cloud to rename it, choose from ten colors, or add, change or remove its icon. Focus Desk remembers each cloud’s appearance and whether it is collapsed when you switch pages or reopen the app.
+- The Untagged cloud now has a Delete action. Focus Desk shows how many unassigned tasks will be removed, and Undo restores those tasks and their journal entries.
 
 Personal update for Apple Silicon Macs running macOS 14 or later.
 ]]></description>
-            <enclosure url="https://github.com/dgilmano/focus-desk/releases/download/personal-v0.7.2-12/FocusDesk-0.7.2-12-arm64-personal.zip" length="4242796" type="application/octet-stream" sparkle:edSignature="PJeA3bkggCIRpCYIn3yGDsrJh1sXdKpFLrqMWY24CtK6d8csHukvTCXIUnORlYM2IYhHBUVJm0wXcHts4kGCDA=="></enclosure>
+            <enclosure url="https://github.com/dgilmano/focus-desk/releases/download/personal-v0.7.3-13/FocusDesk-0.7.3-13-arm64-personal.zip" length="4286807" type="application/octet-stream" sparkle:edSignature="b4kJOM+iv02n9PE7Bv9NNViDlNQ/dtai/hrXXGfiphcbtdUyIONELx25TiqqXHT/81hTSjo5EojHffrhrjv0DQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: I2wX+8Nzd+6fR+oQa/IIJRZUS64O+oKGmh4ZWNDUBpwC6h683djO5E+xYYynTHfpqTs2HpvO2hn6urASiNV9CQ==
-length: 1810
+edSignature: SqTjcwuqSD51sMKnKLH/FTOsiqMbt8LlQXmeMOjOxJGc8Q4MScQqMlApvwOaENnP3EeapLuffW0f5Hh+xfPvAw==
+length: 1858
 -->
