@@ -156,6 +156,7 @@ final class DeskTaskMapLayoutTests: XCTestCase {
         legacy.removeValue(forKey: "labels")
         legacy.removeValue(forKey: "stepOffsets")
         legacy.removeValue(forKey: "expandedTasks")
+        legacy.removeValue(forKey: "clouds")
         let decoded = try JSONDecoder().decode(DeskMapArrangement.self, from: JSONSerialization.data(withJSONObject: legacy))
         XCTAssertEqual(decoded, arranged)
         let restored = base.placing(decoded, items: items, width: 500)
@@ -171,6 +172,46 @@ final class DeskTaskMapLayoutTests: XCTestCase {
         let reopened = try JSONDecoder().decode(DeskMapArrangement.self, from: saved)
         XCTAssertEqual(reopened, arrangement)
         XCTAssertEqual(DeskMapArrangement(expandedTasks: reopened.expandedTasks).expandedTasks, [parent, child])
+    }
+
+    func testHubRecognizesDoubleClickAfterEarlierSingleClickAndKeepsLabelClicksSeparate() {
+        var clicks = DeskMapClicks()
+        XCTAssertFalse(clicks.doubleClickedHub("Study", at: 1, doubleClickInterval: 0.5))
+        XCTAssertFalse(clicks.doubleClickedHub("Study", at: 1.7, doubleClickInterval: 0.5))
+        XCTAssertTrue(clicks.doubleClickedHub("Study", at: 1.8, doubleClickInterval: 0.5))
+        XCTAssertEqual(clicks.record(.project("Study"), at: 2, doubleClickInterval: 0.5), .select)
+        XCTAssertFalse(clicks.doubleClickedHub("Study", at: 2.1, doubleClickInterval: 0.5))
+        XCTAssertFalse(clicks.doubleClickedHub("Sport", at: 2.2, doubleClickInterval: 0.5))
+    }
+
+    func testFoldingCloudHidesOnlyItsTasksAndStepsAndKeepsPlacement() throws {
+        var work = item("Work"), study = item("Study")
+        work.steps = NextStepChecklist("Review draft").items
+        study.steps = NextStepChecklist("Read chapter").items
+        let items = [work, item("Work"), study]
+        let plain = DeskTaskMapLayout(items: items, width: 680)
+        let key = DeskTaskMapLayout.Group.projectID("Work")
+        var saved = DeskMapArrangement(expandedTasks: [work.id, study.id])
+        saved.tasks[work.id] = CGPoint(x: 0.2, y: 0.6)
+        saved.clouds[key] = .init(isCollapsed: true, color: "purple", symbol: "briefcase")
+        let folded = DeskTaskMapLayout(items: items, width: 680, clouds: saved.clouds).placing(saved, items: items, width: 680)
+        XCTAssertEqual(folded.visibleTaskIndices, [2])
+        XCTAssertEqual(folded.groups[0].center, plain.groups[0].center)
+        XCTAssertEqual(folded.groups[0].palette, .purple)
+        XCTAssertLessThan(folded.groups[0].haloBounds.width, plain.groups[0].haloBounds.width)
+        XCTAssertEqual(DeskMapSteps(layout: folded, items: items, width: 680).leaves.map(\.id.task), [study.id])
+        var restored = try JSONDecoder().decode(DeskMapArrangement.self, from: JSONEncoder().encode(saved))
+        restored.clouds[key]?.isCollapsed = false
+        let open = DeskTaskMapLayout(items: items, width: 680, clouds: restored.clouds).placing(restored, items: items, width: 680)
+        XCTAssertEqual(open.visibleTaskIndices, [0, 1, 2])
+        XCTAssertEqual(open.nodes[0].center, folded.nodes[0].center)
+        XCTAssertEqual(DeskMapSteps(layout: open, items: items, width: 680).leaves.map(\.id.task), [work.id, study.id])
+        restored.renameGroup(from: key, to: "tag:new")
+        restored.resetPositions()
+        XCTAssertEqual(restored.clouds["tag:new"]?.symbol, "briefcase")
+        XCTAssertEqual(restored.clouds["tag:new"]?.color, "purple")
+        XCTAssertNil(restored.clouds[key])
+        XCTAssertEqual(restored.expandedTasks, saved.expandedTasks)
     }
 
     func testDropTargetsUseThePointerAndThePlacedCloudIncludingEmptyProjects() throws {

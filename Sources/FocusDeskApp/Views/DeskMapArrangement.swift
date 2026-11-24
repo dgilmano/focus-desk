@@ -16,6 +16,13 @@ struct DeskMapDrag: Equatable {
 
 /// Persist the visible branches along with their manual placements.
 struct DeskMapArrangement: Codable, Equatable {
+    struct Cloud: Codable, Equatable {
+        var isCollapsed = false
+        var color: String?
+        var symbol: String?
+    }
+
+    var clouds: [String: Cloud] = [:]
     var expandedTasks: Set<UUID> = []
     var tasks: [UUID: CGPoint] = [:]
     var stepOffsets: [DeskMapSteps.PlacementKey: CGSize] = [:]
@@ -29,12 +36,21 @@ struct DeskMapArrangement: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        clouds = try values.decodeIfPresent([String: Cloud].self, forKey: .clouds) ?? [:]
         expandedTasks = try values.decodeIfPresent(Set<UUID>.self, forKey: .expandedTasks) ?? []
         tasks = try values.decode([UUID: CGPoint].self, forKey: .tasks)
         stepOffsets = try values.decodeIfPresent([DeskMapSteps.PlacementKey: CGSize].self, forKey: .stepOffsets) ?? [:]
         groups = try values.decode([String: CGPoint].self, forKey: .groups)
         labels = try values.decodeIfPresent([String: CGPoint].self, forKey: .labels) ?? [:]
         groupOrder = try values.decodeIfPresent([String].self, forKey: .groupOrder) ?? []
+    }
+
+    mutating func resetPositions() {
+        tasks.removeAll()
+        stepOffsets.removeAll()
+        groups.removeAll()
+        labels.removeAll()
+        groupOrder.removeAll()
     }
 
     mutating func renameStep(at index: Int, in task: UUID, labels: [String], to name: String) {
@@ -51,6 +67,7 @@ struct DeskMapArrangement: Codable, Equatable {
 
     mutating func renameGroup(from oldID: String, to newID: String) {
         guard oldID != newID else { return }
+        clouds[newID] = clouds.removeValue(forKey: oldID)
         groups[newID] = groups.removeValue(forKey: oldID)
         labels[newID] = labels.removeValue(forKey: oldID)
         groupOrder.removeAll { $0 == newID }

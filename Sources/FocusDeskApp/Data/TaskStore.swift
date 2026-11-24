@@ -182,16 +182,18 @@ final class TaskStore {
         return true
     }
 
-    func deleteProject(named name: String, confirmedTaskIDs: Set<UUID>) -> Bool {
-        let key = DeskProject.key(for: name)
+    func deleteProject(named name: String?, confirmedTaskIDs: Set<UUID>) -> Bool {
+        let key = name.map(DeskProject.key)
         var detached: [(child: FocusTask, parent: UUID)] = []
         var deleted: DeletedProject?
         guard perform(rollback: { for (child, parent) in detached { child.parentTaskID = parent } }, {
-            let project = try context.fetch(FetchDescriptor<DeskProject>(predicate: #Predicate { $0.key == key })).first
+            let project = try key.flatMap { key in
+                try context.fetch(FetchDescriptor<DeskProject>(predicate: #Predicate { $0.key == key })).first
+            }
             let all = try context.fetch(FetchDescriptor<FocusTask>())
             let members = all.filter { $0.deskProjectKey == key }
             let ids = Set(members.map(\.id))
-            guard !key.isEmpty, ids == confirmedTaskIDs, project != nil || !members.isEmpty else {
+            guard key != "", ids == confirmedTaskIDs, project != nil || !members.isEmpty else {
                 throw DeskMapError(message: "The project has changed. Open its menu again to review the deletion.")
             }
             try beforeDeletion()

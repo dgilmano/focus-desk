@@ -31,6 +31,15 @@ struct DeskTaskMapLayout {
         let labelWidth: CGFloat
         let width: CGFloat
         let indices: [Int]
+        let cloud: DeskMapArrangement.Cloud
+        var visibleIndices: [Int] { cloud.isCollapsed ? [] : indices }
+        var haloBounds: CGRect {
+            if cloud.isCollapsed {
+                let title = CGRect(x: label.x - labelWidth / 2, y: label.y - 11, width: labelWidth, height: 22)
+                return title.union(hubBounds).insetBy(dx: -14, dy: -10)
+            }
+            return CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+        }
 
         func includes(_ task: FocusTask) -> Bool {
             if task.projectName != nil {
@@ -55,8 +64,10 @@ struct DeskTaskMapLayout {
     var groups: [Group]
     var nodes: [Node]
     let mapHeight: CGFloat
+    var visibleTaskIndices: [Int] { groups.flatMap(\.visibleIndices).sorted() }
 
-    init(items: [Item], width: CGFloat, projects: [String] = [], groupOrder: [String] = []) {
+    init(items: [Item], width: CGFloat, projects: [String] = [], groupOrder: [String] = [],
+         clouds: [String: DeskMapArrangement.Cloud] = [:]) {
         // Tag IDs belong to individual tasks. Group by normalized name, as the sidebar does.
         var clusters = Dictionary(grouping: items.indices) { Group.id(for: items[$0].tag) }
             .values.sorted { $0[0] < $1[0] }
@@ -90,14 +101,16 @@ struct DeskTaskMapLayout {
                 let base = top + 16 + stagger
                 let direction: CGFloat = paired && column == 0 ? -1 : 1
                 let spread = min(columnWidth * 0.14, 76)
-                let palette = members.first.map { items[$0].palette } ?? .blue
+                let cloud = clouds[Group.id(for: cluster.name)] ?? .init()
+                let palette = cloud.color.flatMap(TaskTagPalette.init(rawValue:)) ?? members.first.map { items[$0].palette } ?? .blue
                 let name = cluster.name ?? "Untagged"
                 // Keep the junction in the gap between rows (or between a lone task and its label).
                 let hubY = members.count <= 1 || members.contains(where: { !items[$0].steps.isEmpty }) ? base + 18 : base + 36 + (CGFloat(members.count / 2) - 0.5) * 47
                 groups.append(Group(tag: cluster.name, palette: palette,
                                     center: CGPoint(x: cx, y: hubY),
                                     label: CGPoint(x: cx, y: base), labelToHub: hubY - base,
-                                    labelWidth: Self.labelWidth(name, padding: 14, limit: min(columnWidth - 10, 164)), width: columnWidth, indices: members))
+                                    labelWidth: Self.labelWidth(name, padding: cloud.symbol == nil ? 14 : 32, limit: min(columnWidth - 10, 180)),
+                                    width: columnWidth, indices: members, cloud: cloud))
                 var slots = members
                 if paired && column == 0 && slots.count >= 2 && !slots.contains(where: { items[$0].isSubtask }) {
                     slots.swapAt(0, 1)
@@ -130,7 +143,7 @@ struct DeskTaskMapLayout {
         let label = groups.last { abs(point.y - $0.label.y) <= 11 && abs(point.x - $0.label.x) <= $0.labelWidth / 2 }
         let hit = label ?? groups.reversed().compactMap { group -> (Group, CGFloat)? in
             let distance = hypot(point.x - group.center.x, point.y - group.center.y)
-            return distance <= group.radius ? (group, distance) : nil
+            return Path(ellipseIn: group.haloBounds).contains(point) ? (group, distance) : nil
         }.min { $0.1 < $1.1 }?.0
         return hit?.id == Group.id(for: item.tag) ? nil : hit
     }
@@ -148,7 +161,7 @@ struct DeskTaskMap: View {
     var width: CGFloat
     var onTasksChanged: () -> Void
     var onDeleteTask: (UUID, String) -> Void
-    var onDeleteProject: (String) -> Void
+    var onDeleteProject: (String?) -> Void
     var onSelect: (UUID) -> Void
 
     @AppStorage("openDeskShowsList") private var showsList = false
@@ -156,6 +169,7 @@ struct DeskTaskMap: View {
     private var storedArrangement = Data()
     @State private var arrangement = DeskMapArrangement()
     @State private var selectedGroupID: String?
+    @State private var cloudPicker: CloudPicker?
     private var expandedTasks: Set<UUID> {
         get { arrangement.expandedTasks }
         nonmutating set {
@@ -205,7 +219,9 @@ struct DeskTaskMap: View {
                                           isSubtask: task.parentTaskID != nil,
                                           steps: !showsList && expandedTasks.contains(task.id) ? steps : [])
         }
-        let automatic = DeskTaskMapLayout(items: items, width: width, projects: projects, groupOrder: arrangement.groupOrder)
+        let automatic = DeskTaskMapLayout(items: items, width: width, projects: projects, groupOrder: arrangement.groupOrder,
+                                          clouds: showsList ? [:] : arrangement.clouds)
+        let visible = automatic.visibleTaskIndices
         let placed = automatic.placing(arrangement, items: items, width: width)
         let layout = drag.map { placed.moving($0, items: items, width: width) } ?? placed
         let destinationID = drag.flatMap { placed.dropTarget(for: $0, items: items)?.id }
@@ -223,7 +239,9 @@ struct DeskTaskMap: View {
                 Spacer()
                 if !showsList && !arrangement.isEmpty {
                     Button {
-                        save(DeskMapArrangement(expandedTasks: expandedTasks))
+                        var next = arrangement
+                        next.resetPositions()
+                        save(next)
                     } label: {
                         Image(systemName: "arrow.counterclockwise")
                     }
@@ -244,35 +262,8 @@ struct DeskTaskMap: View {
                         .frame(width: width, height: branches.height)
                         .transition(.opacity)
                     ForEach(layout.groups) { group in
-                        Button { selectGroup(group, in: displayed) } label: {
-                            Ellipse().fill(.clear)
-                                .frame(width: group.radius * 2, height: group.radius * 2)
-                                .contentShape(Ellipse())
-                        }
-                        .buttonStyle(.plain)
-                        .highPriorityGesture(dragGesture(.group(group.id), onDrop: onDrop) { time in
-                            projectClick(group, in: displayed, time: time)
-                        })
-                        .contextMenu { projectMenu(group) }
-                        .position(group.center).accessibilityHidden(true)
-                        let selected = selectedGroupID == group.id || destinationID == group.id
-                        Button { selectGroup(group, in: displayed) } label: {
-                            Text(group.name).font(.system(size: 11, weight: selected ? .semibold : .regular))
-                                .foregroundStyle(selected ? group.palette.foreground : Color.secondary)
-                                .lineLimit(1).frame(width: group.labelWidth, height: 22)
-                                .background { if selected { Capsule().fill(group.palette.background.opacity(0.7)) } }
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .highPriorityGesture(dragGesture(.label(group.id), onDrop: onDrop) { time in
-                            projectClick(group, in: displayed, time: time)
-                        })
-                        .contextMenu { projectMenu(group) }
-                        .accessibilityAction(named: "Rename project") { beginRename(.project(group.tag), title: group.name) }
-                        .help("Click twice with a pause to rename. Drag the name within the cloud, or drag the cloud to move the project.")
-                        .accessibilityAddTraits(selected ? .isSelected : [])
-                        .position(group.label)
-                        .zIndex(4)
+                        cloudViews(group, selected: selectedGroupID == group.id || destinationID == group.id,
+                                   displayed: displayed, onDrop: onDrop)
                     }
                 }
                 ForEach(branches.leaves) { leaf in
@@ -280,7 +271,7 @@ struct DeskTaskMap: View {
                         .position(x: leaf.frame.midX, y: leaf.frame.midY)
                         .zIndex(drag?.target == .step(leaf.key) ? 6 : 2)
                 }
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                ForEach(visible.map { (index: $0, item: items[$0]) }, id: \.item.id) { index, item in
                     let node = layout.nodes[index]
                     let elapsed = durations[item.id, default: 0]
                     let running = item.id == runningID
@@ -359,12 +350,12 @@ struct DeskTaskMap: View {
         .focusEffectDisabled()
         .focused($mapFocused)
         .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
-            guard editingName == nil, displayed.count > 1,
+            guard editingName == nil, visible.count > 1,
                   press.modifiers.intersection([.command, .control, .option, .shift]).isEmpty else {
                 return .ignored
             }
             let router = DeskRouter()
-            let snapshots = displayed.map(\.snapshot)
+            let snapshots = visible.map { displayed[$0].snapshot }
             let neighbor = press.key == .leftArrow
                 ? router.previousTask(in: snapshots, before: selectedID)
                 : router.nextTask(in: snapshots, after: selectedID)
@@ -513,12 +504,116 @@ struct DeskTaskMap: View {
         }
     }
 
+    @ViewBuilder private func cloudViews(_ group: DeskTaskMapLayout.Group, selected: Bool, displayed: [FocusTask],
+                                         onDrop: @escaping (DeskMapDrag) -> Void) -> some View {
+        Button { selectGroup(group, in: displayed) } label: {
+            Ellipse().fill(.clear)
+                .frame(width: group.haloBounds.width, height: group.haloBounds.height)
+                .contentShape(Ellipse())
+        }
+        .buttonStyle(.plain)
+        .highPriorityGesture(dragGesture(.group(group.id), onDrop: onDrop) { time in
+            projectClick(group, in: displayed, time: time)
+        })
+        .contextMenu { projectMenu(group) }
+        .position(x: group.haloBounds.midX, y: group.haloBounds.midY).accessibilityHidden(true)
+        Button { selectGroup(group, in: displayed) } label: {
+            HStack(spacing: 4) {
+                if let symbol = group.cloud.symbol { Image(systemName: symbol).accessibilityHidden(true) }
+                Text(group.name).lineLimit(1)
+            }
+            .font(.system(size: 11, weight: selected ? .semibold : .regular))
+            .foregroundStyle(selected || group.cloud.color != nil ? group.palette.foreground : Color.secondary)
+            .frame(width: group.labelWidth, height: 22)
+            .background { if selected { Capsule().fill(group.palette.background.opacity(0.7)) } }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .highPriorityGesture(dragGesture(.label(group.id), onDrop: onDrop) { time in
+            projectClick(group, in: displayed, time: time)
+        })
+        .contextMenu { projectMenu(group) }
+        .popover(item: Binding(get: { cloudPicker?.id == group.id ? cloudPicker : nil },
+                               set: { if $0 == nil, cloudPicker?.id == group.id { cloudPicker = nil } })) { picker in
+            switch picker.kind {
+            case .icon:
+                ActivitySymbolPicker(selection: Binding(get: { arrangement.clouds[group.id]?.symbol ?? "" },
+                                                        set: { symbol in editCloud(group.id) { $0.symbol = symbol } }))
+            case .color:
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Cloud color").font(.headline)
+                    TaskTagColorSwatches(selected: group.cloud.color) { color in
+                        editCloud(group.id) { $0.color = color }
+                        cloudPicker = nil
+                    }
+                    Button("Automatic color") {
+                        editCloud(group.id) { $0.color = nil }
+                        cloudPicker = nil
+                    }
+                }
+                .padding(14)
+            }
+        }
+        .accessibilityLabel(group.name)
+        .accessibilityAction(named: "Rename project") { beginRename(.project(group.tag), title: group.name) }
+        .help("Click twice with a pause to rename. Drag the name within the cloud, or drag the cloud to move the project.")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .position(group.label)
+        .zIndex(4)
+
+        Button { toggleCloud(group.id) } label: {
+            ZStack {
+                Circle().fill(group.palette.foreground)
+                    .overlay { Circle().strokeBorder(FocusDeskStyle.groupedBackground, lineWidth: 1) }
+                    .frame(width: group.cloud.isCollapsed ? 14 : 8, height: group.cloud.isCollapsed ? 14 : 8)
+                if group.cloud.isCollapsed {
+                    Image(systemName: "plus").font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(FocusDeskStyle.groupedBackground)
+                }
+            }
+            .frame(width: 18, height: 18).contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .highPriorityGesture(dragGesture(.group(group.id), onDrop: onDrop) { time in
+            selectedGroupID = group.id
+            mapFocused = true
+            if clicks.doubleClickedHub(group.id, at: time, doubleClickInterval: NSEvent.doubleClickInterval) {
+                toggleCloud(group.id)
+            }
+        })
+        .contextMenu { projectMenu(group) }
+        .help(group.cloud.isCollapsed ? "Double-click to expand this cloud" : "Double-click to collapse this cloud")
+        .accessibilityLabel("\(group.name) cloud")
+        .accessibilityValue(group.cloud.isCollapsed ? "Collapsed" : "Expanded")
+        .position(group.center)
+        .zIndex(5)
+    }
+
+    private struct CloudPicker: Identifiable {
+        enum Kind { case color, icon }
+        let id: String
+        let kind: Kind
+    }
+
+    private func editCloud(_ id: String, _ edit: (inout DeskMapArrangement.Cloud) -> Void) {
+        var next = arrangement
+        edit(&next.clouds[id, default: .init()])
+        save(next)
+    }
+
+    private func toggleCloud(_ id: String) { editCloud(id) { $0.isCollapsed.toggle() } }
+
     @ViewBuilder private func projectMenu(_ group: DeskTaskMapLayout.Group) -> some View {
         Button("Rename…") { beginRename(.project(group.tag), title: group.name) }
-        if let name = group.tag {
-            Divider()
-            Button("Delete…", systemImage: "trash", role: .destructive) { onDeleteProject(name) }
+        Button("Change color…", systemImage: "paintpalette") { cloudPicker = .init(id: group.id, kind: .color) }
+        Button(group.cloud.symbol == nil ? "Add icon…" : "Change icon…", systemImage: "square.grid.2x2") {
+            cloudPicker = .init(id: group.id, kind: .icon)
         }
+        if group.cloud.symbol != nil {
+            Button("Remove icon") { editCloud(group.id) { $0.symbol = nil } }
+        }
+        Divider()
+        Button("Delete…", systemImage: "trash", role: .destructive) { onDeleteProject(group.tag) }
     }
 
     private func projectClick(_ group: DeskTaskMapLayout.Group, in displayed: [FocusTask], time: TimeInterval) {
@@ -758,15 +853,15 @@ struct DeskTaskMap: View {
             }
             for group in layout.groups {
                 let color = group.palette.foreground
-                let radius = group.radius
-                let halo = CGRect(x: group.center.x - radius, y: group.center.y - radius,
-                                  width: radius * 2, height: radius * 2)
+                let halo = group.haloBounds
                 if destinationID == group.id {
                     context.stroke(Path(ellipseIn: halo), with: .color(Color.accentColor.opacity(0.8)), lineWidth: 1.5)
                 }
-                context.fill(Path(ellipseIn: halo), with: .radialGradient(Gradient(colors: [color.opacity(0.15), .clear]),
-                                                                         center: group.center, startRadius: 0, endRadius: radius))
-                for index in group.indices {
+                let tint = group.cloud.color.map(ActivityAppearance.accent) ?? color
+                context.fill(Path(ellipseIn: halo), with: .radialGradient(Gradient(colors: [tint.opacity(group.cloud.color == nil ? 0.15 : 0.28), .clear]),
+                                                                         center: CGPoint(x: halo.midX, y: halo.midY), startRadius: 0,
+                                                                         endRadius: max(halo.width, halo.height) / 2))
+                for index in group.visibleIndices {
                     let node = layout.nodes[index].center
                     var link = Path()
                     let parent = rows[index].depth > 0 ? rows[index].item.parentID.flatMap { byID[$0] } : nil
@@ -776,9 +871,6 @@ struct DeskTaskMap: View {
                     link.addQuadCurve(to: node, control: CGPoint(x: (origin.x + node.x) / 2, y: origin.y - bend))
                     context.stroke(link, with: .color(color.opacity(0.55)), lineWidth: 1)
                 }
-                let hub = Path(ellipseIn: group.hubBounds)
-                context.fill(hub, with: .color(color))
-                context.stroke(hub, with: .color(FocusDeskStyle.groupedBackground), lineWidth: 1)
             }
         }
         .allowsHitTesting(false)
@@ -795,20 +887,30 @@ enum DeskMapObject: Hashable {
 
 struct DeskMapClicks {
     enum Action { case select, doubleClick, rename }
-    private var previous: DeskMapObject?
+    private enum Target: Equatable { case object(DeskMapObject), hub(String) }
+    private var previous: Target?
     private var time: TimeInterval = 0
 
     var ownerTask: UUID? {
         switch previous {
-        case .task(let id): return id
-        case .step(let step): return step.task
+        case .object(.task(let id)): return id
+        case .object(.step(let step)): return step.task
         default: return nil
         }
     }
 
     mutating func record(_ object: DeskMapObject, at now: TimeInterval, doubleClickInterval: TimeInterval) -> Action {
+        recordTarget(.object(object), at: now, doubleClickInterval: doubleClickInterval, renameWindow: 0.85)
+    }
+
+    mutating func doubleClickedHub(_ id: String, at now: TimeInterval, doubleClickInterval: TimeInterval) -> Bool {
+        recordTarget(.hub(id), at: now, doubleClickInterval: doubleClickInterval, renameWindow: 0) == .doubleClick
+    }
+
+    private mutating func recordTarget(_ object: Target, at now: TimeInterval, doubleClickInterval: TimeInterval,
+                                       renameWindow: TimeInterval) -> Action {
         let elapsed = now - time
-        if previous == object, elapsed >= 0, elapsed <= doubleClickInterval + 0.85 {
+        if previous == object, elapsed >= 0, elapsed <= doubleClickInterval + renameWindow {
             previous = nil
             return elapsed <= doubleClickInterval ? .doubleClick : .rename
         }

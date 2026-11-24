@@ -399,20 +399,7 @@ struct ActivityCategoriesView: View {
             TextField("Activity name", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .focused($nameFocused)
-            HStack(spacing: 8) {
-                ForEach(TaskTagPalette.allCases) { palette in
-                    Button { color = palette.rawValue } label: {
-                        Circle().fill(palette.background)
-                            .overlay {
-                                Circle().strokeBorder(color == palette.rawValue ? palette.foreground : palette.foreground.opacity(0.2),
-                                                      lineWidth: color == palette.rawValue ? 2 : 0.7)
-                            }
-                            .frame(width: 26, height: 26)
-                    }
-                    .buttonStyle(.plain).help(palette.displayName).accessibilityLabel(palette.displayName)
-                    .accessibilityValue(color == palette.rawValue ? "Selected" : "")
-                }
-            }
+            TaskTagColorSwatches(selected: color) { color = $0 }
             if !symbols.contains(symbol) {
                 Label("Selected icon", systemImage: symbol)
                     .foregroundStyle(ActivityAppearance.accent(color))

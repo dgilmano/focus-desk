@@ -7,6 +7,31 @@ import XCTest
 final class DataProtectionTests: XCTestCase {
     private enum SaveFailure: Error { case diskFull }
 
+    func testDeleteUnassignedCloudKeepsNamedUntaggedProjectAndSupportsUndo() throws {
+        let container = try PersistenceController.makeModelContainer(inMemory: true)
+        let context = container.mainContext
+        let store = TaskStore(context: context)
+        let unassigned = FocusTask(title: "Inbox", sortOrder: 0)
+        let named = FocusTask(title: "Project task", sortOrder: 1)
+        named.projectName = "Untagged"
+        context.insert(unassigned)
+        context.insert(named)
+        context.insert(DeskProject(name: "Untagged"))
+        context.insert(ProgressEntry(note: "Note", timestamp: Date(), task: unassigned))
+        try context.save()
+        let original = try WorkspaceBackup.capture(from: context).validated()
+        XCTAssertFalse(store.deleteProject(named: nil, confirmedTaskIDs: [named.id]))
+        XCTAssertTrue(store.deleteProject(named: nil, confirmedTaskIDs: [unassigned.id]))
+        let after = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(after.tasks.map(\.id), [named.id])
+        XCTAssertEqual(after.projects, ["Untagged"])
+        XCTAssertTrue(after.entries.isEmpty)
+        XCTAssertTrue(store.undoDeletion())
+        let restored = try WorkspaceBackup.capture(from: ModelContext(container)).validated()
+        XCTAssertEqual(Set(restored.tasks.map(\.id)), Set(original.tasks.map(\.id)))
+        XCTAssertEqual(restored.entries, original.entries)
+    }
+
     func testDeleteProjectAndUndoRestoresWholeHierarchyAndJournalsInOneOperation() throws {
         let container = try PersistenceController.makeModelContainer(inMemory: true)
         let context = container.mainContext

@@ -141,3 +141,25 @@ enum TaskTagPalette: String, CaseIterable, Identifiable {
         })
     }
 }
+
+struct TaskTagColorSwatches: View {
+    var selected: String?
+    var select: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(TaskTagPalette.allCases) { palette in
+                Button { select(palette.rawValue) } label: {
+                    Circle().fill(palette.background)
+                        .overlay {
+                            Circle().strokeBorder(selected == palette.rawValue ? palette.foreground : palette.foreground.opacity(0.2),
+                                                  lineWidth: selected == palette.rawValue ? 2 : 0.7)
+                        }
+                        .frame(width: 26, height: 26)
+                }
+                .buttonStyle(.plain).help(palette.displayName).accessibilityLabel(palette.displayName)
+                .accessibilityValue(selected == palette.rawValue ? "Selected" : "")
+            }
+        }
+    }
+}

@@ -24,12 +24,12 @@ private enum MainSection: Equatable {
 
 private enum DeskDeletion {
     case task(UUID, String)
-    case project(String, Set<UUID>)
+    case project(String?, Set<UUID>)
 
     var title: String {
         switch self {
         case .task(_, let name): return "Delete task “\(name)”?"
-        case .project(let name, _): return "Delete project “\(name)”?"
+        case .project(let name, _): return name.map { "Delete project “\($0)”?" } ?? "Delete unassigned tasks?"
         }
     }
 
@@ -37,9 +37,12 @@ private enum DeskDeletion {
         switch self {
         case .task:
             return "This deletes the task and its journal. Its subtasks stay in the project. You can undo this deletion."
-        case .project(_, let ids):
+        case .project(let name, let ids):
             if ids.isEmpty { return "This deletes the empty project. You can undo this deletion." }
             let count = "\(ids.count) " + (ids.count == 1 ? "task" : "tasks")
+            if name == nil {
+                return "This deletes \(count) in the Untagged cloud, including any subtasks, completed tasks and their journal entries. You can undo this deletion."
+            }
             return "This deletes the project and \(count), including any subtasks, completed tasks and their journal entries. You can undo the entire deletion."
         }
     }
@@ -1083,7 +1086,7 @@ struct MainDeskView: View {
                         DeskTaskMap(tasks: activeTasks, projects: projects.map(\.name), selectedID: task?.id, width: mapWidth,
                                     onTasksChanged: refreshWidgetSnapshot, onDeleteTask: { pendingDeletion = .task($0, $1) },
                                     onDeleteProject: { name in
-                                        let key = DeskProject.key(for: name)
+                                        let key = name.map(DeskProject.key)
                                         pendingDeletion = .project(name, Set(tasks.filter { $0.deskProjectKey == key }.map(\.id)))
                                     }) { id in
                             noteFocused = false

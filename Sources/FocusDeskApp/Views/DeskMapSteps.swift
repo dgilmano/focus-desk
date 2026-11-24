@@ -65,14 +65,14 @@ struct DeskMapSteps {
     init(layout: DeskTaskMapLayout, items: [DeskTaskMapLayout.Item], width: CGFloat,
          offsets: [PlacementKey: CGSize] = [:]) {
         var leaves: [Leaf] = []
-        var occupied = layout.nodes.map(\.chipBounds)
+        var occupied = layout.visibleTaskIndices.map { layout.nodes[$0].chipBounds }
         for group in layout.groups {
             occupied.append(group.hubBounds)
             occupied.append(CGRect(x: group.label.x - group.labelWidth / 2, y: group.label.y - 11, width: group.labelWidth, height: 22))
         }
         var height = layout.mapHeight
         for group in layout.groups {
-            for i in group.indices where !items[i].steps.isEmpty {
+            for i in group.visibleIndices where !items[i].steps.isEmpty {
                 let item = items[i]
                 let keys = PlacementKey.keys(task: item.id, labels: item.steps.map(\.text))
                 let parent = layout.nodes[i].center
